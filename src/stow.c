@@ -106,7 +106,12 @@ static void prepare_conflict_cb(const char *file_path, const char *rel_path, voi
 
     if (is_symlink(target_path)) {
         char *link_dest = read_symlink_target(target_path);
-        if (link_dest && strcmp(link_dest, file_path) == 0) {
+        char real_file_path[PATH_MAX];
+        if (realpath(file_path, real_file_path) == NULL) {
+            snprintf(real_file_path, sizeof(real_file_path), "%s", file_path);
+        }
+
+        if (link_dest && (strcmp(link_dest, file_path) == 0 || strcmp(link_dest, real_file_path) == 0)) {
             ctx->unchanged_count++;
             if (ctx->dry_run) {
                 if (ctx->unchanged_count <= 3) {

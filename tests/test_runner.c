@@ -72,18 +72,31 @@ static void test_shell_escaping(void) {
     ASSERT_STR_EQ(esc, "/home/user/my\\\"dir/\\$test");
 }
 
+static void test_expand_tilde(void) {
+    char out[1024];
+    expand_tilde_path("~/.zsh/plugins", out, sizeof(out));
+    const char *home = getenv("HOME");
+    if (home) {
+        char expected[1024];
+        snprintf(expected, sizeof(expected), "%s/.zsh/plugins", home);
+        ASSERT_STR_EQ(out, expected);
+    }
+}
+
 static void test_package_discovery(void) {
     char tmp_dir[] = "/tmp/stow_pkgdisc_XXXXXX";
     ASSERT(mkdtemp(tmp_dir) != NULL, "Should create temp dotfiles dir");
 
-    char p_bin[1024], p_scripts[1024], p_build[1024];
+    char p_bin[1024], p_scripts[1024], p_build[1024], p_cfg[1024];
     snprintf(p_bin, sizeof(p_bin), "%s/bin", tmp_dir);
     snprintf(p_scripts, sizeof(p_scripts), "%s/scripts", tmp_dir);
     snprintf(p_build, sizeof(p_build), "%s/build", tmp_dir);
+    snprintf(p_cfg, sizeof(p_cfg), "%s/.config", tmp_dir);
 
     mkdir_p(p_bin, 0755);
     mkdir_p(p_scripts, 0755);
     mkdir_p(p_build, 0755);
+    mkdir_p(p_cfg, 0755);
 
     StringArray pkgs;
     str_array_init(&pkgs);
@@ -91,6 +104,7 @@ static void test_package_discovery(void) {
 
     ASSERT(str_array_contains(&pkgs, "bin"), "Package 'bin' should be discovered");
     ASSERT(str_array_contains(&pkgs, "scripts"), "Package 'scripts' should be discovered");
+    ASSERT(str_array_contains(&pkgs, ".config"), "Package '.config' should be discovered");
     ASSERT(!str_array_contains(&pkgs, "build"), "Directory 'build' should be ignored");
 
     str_array_free(&pkgs);
@@ -262,6 +276,7 @@ int main(void) {
     RUN_TEST(test_mkdir_p);
     RUN_TEST(test_path_normalization);
     RUN_TEST(test_shell_escaping);
+    RUN_TEST(test_expand_tilde);
     RUN_TEST(test_package_discovery);
     RUN_TEST(test_string_array);
     RUN_TEST(test_manifest_load_save);
