@@ -21,10 +21,20 @@
 
 #include "checker.h"
 
+typedef enum {
+    STOW_STATUS_UNSTOWED = 0,
+    STOW_STATUS_PARTIAL,
+    STOW_STATUS_STOWED
+} StowStatus;
+
 void parse_stowignore(const char *dir_path, StringArray *ignore_patterns);
+void parse_stowignore_raw(const char *dir_path, StringArray *raw_ignores);
+bool is_path_ignored(const char *rel_path, const StringArray *raw_ignores);
+
 void unfold_directory_symlinks(const char *target_dir, const char *dotfiles_dir, bool dry_run);
 void prepare_target_conflicts(const char *target_dir, const char *dotfiles_dir, const char *pkg_name, bool dry_run);
 
+StowStatus get_package_stow_status(const char *target_dir, const char *dotfiles_dir, const char *pkg_name);
 bool is_package_stowed(const char *target_dir, const char *dotfiles_dir, const char *pkg_name);
 void handle_mutual_exclusions(const char *target_dir, const char *dotfiles_dir, const char *pkg_name, bool dry_run);
 

@@ -19,6 +19,7 @@
 #define _POSIX_C_SOURCE 200809L
 #include "stow.h"
 #include <time.h>
+#include <fnmatch.h>
 
 void parse_stowignore(const char *dir_path, StringArray *ignore_patterns) {
     if (!dir_path) return;
@@ -59,6 +60,77 @@ void parse_stowignore(const char *dir_path, StringArray *ignore_patterns) {
 
     free(linebuf);
     fclose(fp);
+}
+
+void parse_stowignore_raw(const char *dir_path, StringArray *raw_ignores) {
+    if (!dir_path) return;
+    char ignore_file[PATH_MAX * 2];
+    join_path(ignore_file, sizeof(ignore_file), dir_path, ".stowignore");
+
+    FILE *fp = fopen(ignore_file, "r");
+    if (!fp) return;
+
+    char *linebuf = NULL;
+    size_t linecap = 0;
+    ssize_t linelen;
+
+    while ((linelen = getline(&linebuf, &linecap, fp)) != -1) {
+        (void)linelen;
+        char *trimmed = trim_whitespace(linebuf);
+        if (trimmed[0] == '#' || trimmed[0] == '\0') continue;
+        if (!str_array_contains(raw_ignores, trimmed)) {
+            str_array_append(raw_ignores, trimmed);
+        }
+    }
+
+    free(linebuf);
+    fclose(fp);
+}
+
+bool is_path_ignored(const char *rel_path, const StringArray *raw_ignores) {
+    if (!rel_path || strlen(rel_path) == 0) return false;
+
+    const char *base = strrchr(rel_path, '/');
+    base = base ? base + 1 : rel_path;
+
+    if (strcmp(base, ".stowdeps") == 0 ||
+        strcmp(base, ".stowignore") == 0 ||
+        strcmp(base, ".git") == 0 ||
+        strcmp(base, ".gitattributes") == 0 ||
+        strcmp(base, ".DS_Store") == 0 ||
+        strcmp(rel_path, ".gitignore") == 0 ||
+        strcmp(rel_path, "README.md") == 0 ||
+        strcmp(rel_path, "LICENSE") == 0) {
+        return true;
+    }
+
+    if (strstr(rel_path, "/.git/") || strstr(rel_path, "/.stowdeps/") || strstr(rel_path, "/.stowignore/")) {
+        return true;
+    }
+
+    if (!raw_ignores) return false;
+
+    for (size_t i = 0; i < raw_ignores->count; i++) {
+        const char *pat = raw_ignores->items[i];
+        if (!pat || strlen(pat) == 0) continue;
+
+        if (fnmatch(pat, rel_path, FNM_PATHNAME) == 0 || fnmatch(pat, base, 0) == 0) {
+            return true;
+        }
+
+        size_t plen = strlen(pat);
+        if (pat[plen - 1] == '/') {
+            char dir_pat[PATH_MAX];
+            snprintf(dir_pat, sizeof(dir_pat), "%.*s", (int)(plen - 1), pat);
+            if (fnmatch(dir_pat, rel_path, FNM_PATHNAME) == 0 ||
+                strncmp(rel_path, pat, plen) == 0 ||
+                strstr(rel_path, pat) != NULL) {
+                return true;
+            }
+        }
+    }
+
+    return false;
 }
 
 static void get_timestamp_str(char *buf, size_t size) {
@@ -135,6 +207,7 @@ typedef struct {
     const char *target_dir;
     const char *pkg_dir;
     const char *real_pkg_dir;
+    const StringArray *raw_ignores;
     bool dry_run;
     size_t new_links;
     size_t replaced_links;
@@ -145,6 +218,10 @@ typedef struct {
 static void prepare_conflict_cb(const char *file_path, const char *rel_path, void *user_data) {
     (void)file_path;
     ConflictContext *ctx = (ConflictContext *)user_data;
+
+    if (is_path_ignored(rel_path, ctx->raw_ignores)) {
+        return;
+    }
 
     char target_path[PATH_MAX * 2];
     join_path(target_path, sizeof(target_path), ctx->target_dir, rel_path);
@@ -211,26 +288,40 @@ void prepare_target_conflicts(const char *target_dir, const char *dotfiles_dir, 
         log_info("[DRY-RUN] Previewing target paths & conflicts for package '%s'...", pkg_name);
     }
 
-    ConflictContext ctx = { target_dir, pkg_dir, real_pkg_dir, dry_run, 0, 0, 0, 0 };
+    StringArray raw_ignores;
+    str_array_init(&raw_ignores);
+    parse_stowignore_raw(dotfiles_dir, &raw_ignores);
+    parse_stowignore_raw(pkg_dir, &raw_ignores);
+
+    ConflictContext ctx = { target_dir, pkg_dir, real_pkg_dir, &raw_ignores, dry_run, 0, 0, 0, 0 };
     walk_dir_files(pkg_dir, "", prepare_conflict_cb, &ctx);
 
     if (dry_run) {
         log_info("[DRY-RUN] Summary for '%s': %zu new symlink(s), %zu replaced, %zu backed up, %zu unchanged.",
                  pkg_name, ctx.new_links, ctx.replaced_links, ctx.backups, ctx.unchanged);
     }
+
+    str_array_free(&raw_ignores);
 }
 
 typedef struct {
     const char *target_dir;
     const char *pkg_dir;
     const char *real_pkg_dir;
-    bool is_stowed;
-} CheckStowedContext;
+    const StringArray *raw_ignores;
+    size_t total_files;
+    size_t stowed_files;
+} CheckStowedStatsContext;
 
-static void check_stowed_cb(const char *file_path, const char *rel_path, void *user_data) {
+static void check_stowed_stats_cb(const char *file_path, const char *rel_path, void *user_data) {
     (void)file_path;
-    CheckStowedContext *ctx = (CheckStowedContext *)user_data;
-    if (!ctx->is_stowed) return;
+    CheckStowedStatsContext *ctx = (CheckStowedStatsContext *)user_data;
+
+    if (is_path_ignored(rel_path, ctx->raw_ignores)) {
+        return;
+    }
+
+    ctx->total_files++;
 
     char target_path[PATH_MAX * 2];
     join_path(target_path, sizeof(target_path), ctx->target_dir, rel_path);
@@ -243,27 +334,42 @@ static void check_stowed_cb(const char *file_path, const char *rel_path, void *u
 
     if (is_symlink(target_path)) {
         char *target = read_symlink_target(target_path);
-        if (!target || (strcmp(target, pkg_file_path) != 0 && strcmp(target, real_pkg_file_path) != 0)) {
-            ctx->is_stowed = false;
+        if (target && (strcmp(target, pkg_file_path) == 0 || strcmp(target, real_pkg_file_path) == 0)) {
+            ctx->stowed_files++;
         }
         if (target) free(target);
-    } else {
-        ctx->is_stowed = false;
     }
 }
 
-bool is_package_stowed(const char *target_dir, const char *dotfiles_dir, const char *pkg_name) {
+StowStatus get_package_stow_status(const char *target_dir, const char *dotfiles_dir, const char *pkg_name) {
     char pkg_dir[PATH_MAX * 2];
     join_path(pkg_dir, sizeof(pkg_dir), dotfiles_dir, pkg_name);
+
+    if (!is_dir(pkg_dir)) return STOW_STATUS_UNSTOWED;
 
     char real_pkg_dir[PATH_MAX * 2];
     if (realpath(pkg_dir, real_pkg_dir) == NULL) {
         snprintf(real_pkg_dir, sizeof(real_pkg_dir), "%s", pkg_dir);
     }
 
-    CheckStowedContext ctx = { target_dir, pkg_dir, real_pkg_dir, true };
-    walk_dir_files(pkg_dir, "", check_stowed_cb, &ctx);
-    return ctx.is_stowed;
+    StringArray raw_ignores;
+    str_array_init(&raw_ignores);
+    parse_stowignore_raw(dotfiles_dir, &raw_ignores);
+    parse_stowignore_raw(pkg_dir, &raw_ignores);
+
+    CheckStowedStatsContext ctx = { target_dir, pkg_dir, real_pkg_dir, &raw_ignores, 0, 0 };
+    walk_dir_files(pkg_dir, "", check_stowed_stats_cb, &ctx);
+    str_array_free(&raw_ignores);
+
+    if (ctx.total_files == 0) return STOW_STATUS_UNSTOWED;
+    if (ctx.stowed_files == ctx.total_files) return STOW_STATUS_STOWED;
+    if (ctx.stowed_files > 0) return STOW_STATUS_PARTIAL;
+    return STOW_STATUS_UNSTOWED;
+}
+
+bool is_package_stowed(const char *target_dir, const char *dotfiles_dir, const char *pkg_name) {
+    StowStatus status = get_package_stow_status(target_dir, dotfiles_dir, pkg_name);
+    return status == STOW_STATUS_STOWED || status == STOW_STATUS_PARTIAL;
 }
 
 void handle_mutual_exclusions(const char *target_dir, const char *dotfiles_dir, const char *pkg_name, bool dry_run) {
@@ -436,11 +542,13 @@ void list_packages_status(const char *dotfiles_dir, const char *target_dir) {
 
     for (size_t i = 0; i < packages.count; i++) {
         const char *pkg = packages.items[i];
-        bool stowed = is_package_stowed(target_dir, dotfiles_dir, pkg);
-        if (stowed) {
+        StowStatus status = get_package_stow_status(target_dir, dotfiles_dir, pkg);
+        if (status == STOW_STATUS_STOWED) {
             printf("  %s[STOWED]%s   %s\n", COLOR_GREEN, COLOR_RESET, pkg);
+        } else if (status == STOW_STATUS_PARTIAL) {
+            printf("  %s[PARTIAL]%s  %s\n", COLOR_YELLOW, COLOR_RESET, pkg);
         } else {
-            printf("  %s[UNSTOWED]%s %s\n", COLOR_YELLOW, COLOR_RESET, pkg);
+            printf("  %s[UNSTOWED]%s %s\n", COLOR_RED, COLOR_RESET, pkg);
         }
     }
     printf("\n");
