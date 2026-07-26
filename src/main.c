@@ -106,27 +106,44 @@ static size_t get_visible_length(const char *text) {
 }
 
 static bool split_bullet_line(const char *content, char *label_buf, size_t label_sz, const char **desc_out) {
-    const char *sep = strstr(content, "  ");
-    const char *colon_sep = strstr(content, " : ");
-    if (colon_sep && (!sep || colon_sep < sep)) {
-        sep = colon_sep;
+    if (!content || !*content) return false;
+
+    const char *p = content;
+    const char *last_tag_end = NULL;
+
+    while (*p) {
+        if (*p == '>' || *p == ']') {
+            last_tag_end = p + 1;
+        } else if (strncmp(p, "**", 2) == 0) {
+            p += 2;
+            last_tag_end = p;
+            continue;
+        } else if (*p == '`' || *p == '*') {
+            last_tag_end = p + 1;
+        }
+        p++;
     }
 
-    if (!sep) {
+    if (!last_tag_end) {
         return false;
     }
 
-    size_t label_len = (size_t)(sep - content);
-    if (label_len >= label_sz) label_len = label_sz - 1;
-
-    strncpy(label_buf, content, label_len);
-    label_buf[label_len] = '\0';
-
-    while (*sep == ' ' || *sep == ':') {
-        sep++;
+    const char *s = last_tag_end;
+    while (*s == ' ') {
+        s++;
     }
-    *desc_out = sep;
-    return true;
+
+    if (*s != '\0' && *s != '\n' && *s != '\r') {
+        size_t label_len = (size_t)(last_tag_end - content);
+        if (label_len >= label_sz) label_len = label_sz - 1;
+
+        strncpy(label_buf, content, label_len);
+        label_buf[label_len] = '\0';
+        *desc_out = s;
+        return true;
+    }
+
+    return false;
 }
 
 static void render_markdown_line(char *line, bool is_tty) {
