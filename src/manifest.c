@@ -25,9 +25,11 @@ void manifest_init(PackageManifest *manifest, const char *pkg_name) {
 }
 
 bool manifest_load(PackageManifest *manifest, const char *dotfiles_dir) {
+    char pkg_dir[PATH_MAX * 2];
+    join_path(pkg_dir, sizeof(pkg_dir), dotfiles_dir, manifest->package_name);
+
     char path[PATH_MAX * 4];
-    join_path(path, sizeof(path), dotfiles_dir, manifest->package_name);
-    join_path(path, sizeof(path), path, ".stowdeps");
+    join_path(path, sizeof(path), pkg_dir, ".stowdeps");
 
     FILE *fp = fopen(path, "r");
     if (!fp) return false;
@@ -37,6 +39,7 @@ bool manifest_load(PackageManifest *manifest, const char *dotfiles_dir) {
     ssize_t linelen;
 
     while ((linelen = getline(&linebuf, &linecap, fp)) != -1) {
+        (void)linelen;
         char *trimmed = trim_whitespace(linebuf);
         if (trimmed[0] == '#' || trimmed[0] == '\0') continue;
 
@@ -164,9 +167,10 @@ void manifest_remove_dep(const char *dotfiles_dir, const char *pkg_name, const c
 }
 
 void manifest_show(const char *dotfiles_dir, const char *pkg_name) {
+    char pkg_dir[PATH_MAX * 2];
+    join_path(pkg_dir, sizeof(pkg_dir), dotfiles_dir, pkg_name);
     char path[PATH_MAX * 4];
-    join_path(path, sizeof(path), dotfiles_dir, pkg_name);
-    join_path(path, sizeof(path), path, ".stowdeps");
+    join_path(path, sizeof(path), pkg_dir, ".stowdeps");
 
     if (!file_exists(path)) {
         log_warn("Package '%s' does not have a '.stowdeps' manifest file.", pkg_name);
@@ -176,13 +180,10 @@ void manifest_show(const char *dotfiles_dir, const char *pkg_name) {
     printf("\n%s%s=== Manifest [.stowdeps] for '%s' ===%s\n\n", COLOR_CYAN, COLOR_BOLD, pkg_name, COLOR_RESET);
     FILE *fp = fopen(path, "r");
     if (fp) {
-        char *linebuf = NULL;
-        size_t linecap = 0;
-        ssize_t linelen;
-        while ((linelen = getline(&linebuf, &linecap, fp)) != -1) {
-            fputs(linebuf, stdout);
+        char line[512];
+        while (fgets(line, sizeof(line), fp)) {
+            fputs(line, stdout);
         }
-        free(linebuf);
         fclose(fp);
     }
     printf("\n");

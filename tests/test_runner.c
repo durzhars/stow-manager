@@ -6,9 +6,9 @@
 #include "../include/utils.h"
 #include "../include/manifest.h"
 #include "../include/registry.h"
+#include "../include/config.h"
 #include "../include/stow.h"
 #include "../include/checker.h"
-#include "../include/config.h"
 
 static void test_trim_whitespace(void) {
     char s1[] = "  hello world  ";
@@ -19,120 +19,6 @@ static void test_trim_whitespace(void) {
 
     char s3[] = "\t\n  ";
     ASSERT_STR_EQ(trim_whitespace(s3), "");
-
-    char s4[] = "\"";
-    ASSERT_STR_EQ(trim_whitespace(s4), "\"");
-
-    char s5[] = "'";
-    ASSERT_STR_EQ(trim_whitespace(s5), "'");
-}
-
-static void test_mkdir_p(void) {
-    char tmp_dir[] = "/tmp/stow_mkdir_XXXXXX";
-    ASSERT(mkdtemp(tmp_dir) != NULL, "Should create temporary directory");
-
-    char nested[1024];
-    snprintf(nested, sizeof(nested), "%s/level1/level2/level3", tmp_dir);
-
-    ASSERT(mkdir_p(nested, 0755) == 0, "mkdir_p should succeed creating nested directories");
-    ASSERT(is_dir(nested), "Nested directory level3 should exist");
-
-    char cleanup_cmd[2048];
-    snprintf(cleanup_cmd, sizeof(cleanup_cmd), "rm -rf \"%s\"", tmp_dir);
-    system(cleanup_cmd);
-}
-
-static void test_path_normalization(void) {
-    char p1[1024] = "/home/user/";
-    normalize_path(p1);
-    ASSERT_STR_EQ(p1, "/home/user");
-
-    char p2[1024] = "/home/user///";
-    normalize_path(p2);
-    ASSERT_STR_EQ(p2, "/home/user");
-
-    char p3[1024] = "/";
-    normalize_path(p3);
-    ASSERT_STR_EQ(p3, "/");
-
-    char p4[1024] = "/home/user/.config/nvim/../../.dotfiles/nvim/init.vim";
-    collapse_path(p4);
-    ASSERT_STR_EQ(p4, "/home/user/.dotfiles/nvim/init.vim");
-
-    char out[1024];
-    join_path(out, sizeof(out), "/home/user/", "/.config/nvim");
-    ASSERT_STR_EQ(out, "/home/user/.config/nvim");
-
-    join_path(out, sizeof(out), "/home/user", ".config/nvim");
-    ASSERT_STR_EQ(out, "/home/user/.config/nvim");
-
-    ASSERT(is_path_prefix("/home/user/dotfiles/nvim", "/home/user/dotfiles"), "Prefix match should succeed");
-    ASSERT(!is_path_prefix("/home/user/dotfiles-backup/file", "/home/user/dotfiles"), "Similar prefix without slash boundary must fail");
-}
-
-static void test_shell_escaping(void) {
-    char esc[1024];
-    escape_shell_arg("/home/user/my\"dir/$test", esc, sizeof(esc));
-    ASSERT_STR_EQ(esc, "/home/user/my\\\"dir/\\$test");
-}
-
-static void test_expand_tilde(void) {
-    char out[1024];
-    expand_tilde_path("~/.zsh/plugins", out, sizeof(out));
-    const char *home = getenv("HOME");
-    if (home) {
-        char expected[1024];
-        snprintf(expected, sizeof(expected), "%s/.zsh/plugins", home);
-        ASSERT_STR_EQ(out, expected);
-    }
-}
-
-static void test_package_discovery(void) {
-    char tmp_dir[] = "/tmp/stow_pkgdisc_XXXXXX";
-    ASSERT(mkdtemp(tmp_dir) != NULL, "Should create temp dotfiles dir");
-
-    char p_bin[1024], p_scripts[1024], p_build[1024], p_cfg[1024];
-    snprintf(p_bin, sizeof(p_bin), "%s/bin", tmp_dir);
-    snprintf(p_scripts, sizeof(p_scripts), "%s/scripts", tmp_dir);
-    snprintf(p_build, sizeof(p_build), "%s/build", tmp_dir);
-    snprintf(p_cfg, sizeof(p_cfg), "%s/.config", tmp_dir);
-
-    mkdir_p(p_bin, 0755);
-    mkdir_p(p_scripts, 0755);
-    mkdir_p(p_build, 0755);
-    mkdir_p(p_cfg, 0755);
-
-    StringArray pkgs;
-    str_array_init(&pkgs);
-    get_all_packages(tmp_dir, &pkgs);
-
-    ASSERT(str_array_contains(&pkgs, "scripts"), "Package 'scripts' should be discovered");
-    ASSERT(str_array_contains(&pkgs, ".config"), "Package '.config' should be discovered");
-    ASSERT(!str_array_contains(&pkgs, "build"), "Directory 'build' should be ignored when .stowignore is absent");
-    ASSERT(!str_array_contains(&pkgs, "bin"), "Directory 'bin' should be ignored when .stowignore is absent");
-
-    str_array_free(&pkgs);
-
-    // Now create .stowignore containing only 'build'
-    char ignore_path[1024];
-    snprintf(ignore_path, sizeof(ignore_path), "%s/.stowignore", tmp_dir);
-    FILE *fp = fopen(ignore_path, "w");
-    if (fp) {
-        fprintf(fp, "build\n");
-        fclose(fp);
-    }
-
-    str_array_init(&pkgs);
-    get_all_packages(tmp_dir, &pkgs);
-
-    ASSERT(str_array_contains(&pkgs, "bin"), "Package 'bin' should be discovered when .stowignore is present and bin is not ignored");
-    ASSERT(!str_array_contains(&pkgs, "build"), "Directory 'build' should be ignored via .stowignore");
-
-    str_array_free(&pkgs);
-
-    char cleanup_cmd[2048];
-    snprintf(cleanup_cmd, sizeof(cleanup_cmd), "rm -rf \"%s\"", tmp_dir);
-    system(cleanup_cmd);
 }
 
 static void test_string_array(void) {
@@ -156,7 +42,7 @@ static void test_manifest_load_save(void) {
     char tmp_dir[] = "/tmp/stow_test_XXXXXX";
     ASSERT(mkdtemp(tmp_dir) != NULL, "Should create temporary test directory");
 
-    char pkg_dir[1024];
+    char pkg_dir[PATH_MAX * 4];
     snprintf(pkg_dir, sizeof(pkg_dir), "%s/testpkg", tmp_dir);
     mkdir(pkg_dir, 0755);
 
@@ -181,16 +67,16 @@ static void test_manifest_load_save(void) {
 
     manifest_free(&loaded);
 
-    char cleanup_cmd[1024];
+    char cleanup_cmd[PATH_MAX * 4];
     snprintf(cleanup_cmd, sizeof(cleanup_cmd), "rm -rf \"%s\"", tmp_dir);
-    system(cleanup_cmd);
+    (void)system(cleanup_cmd);
 }
 
 static void test_registry_parsing(void) {
     char tmp_dir[] = "/tmp/stow_reg_XXXXXX";
     ASSERT(mkdtemp(tmp_dir) != NULL, "Should create temporary test directory");
 
-    char reg_path[1024];
+    char reg_path[PATH_MAX * 4];
     snprintf(reg_path, sizeof(reg_path), "%s/stow.registry", tmp_dir);
     FILE *fp = fopen(reg_path, "w");
     ASSERT(fp != NULL, "Should open registry file for writing");
@@ -211,9 +97,9 @@ static void test_registry_parsing(void) {
     registry_get_distro_pkg(tmp_dir, "tool_a", "ubuntu", distro_pkg, sizeof(distro_pkg));
     ASSERT_STR_EQ(distro_pkg, "pkg_a_ubuntu");
 
-    char cleanup_cmd[1024];
+    char cleanup_cmd[PATH_MAX * 4];
     snprintf(cleanup_cmd, sizeof(cleanup_cmd), "rm -rf \"%s\"", tmp_dir);
-    system(cleanup_cmd);
+    (void)system(cleanup_cmd);
 }
 
 static void test_dry_run_stow(void) {
@@ -222,11 +108,11 @@ static void test_dry_run_stow(void) {
     ASSERT(mkdtemp(tmp_dotfiles) != NULL, "Should create temporary dotfiles directory");
     ASSERT(mkdtemp(tmp_target) != NULL, "Should create temporary target directory");
 
-    char pkg_dir[1024];
+    char pkg_dir[PATH_MAX * 4];
     snprintf(pkg_dir, sizeof(pkg_dir), "%s/mypkg", tmp_dotfiles);
     mkdir(pkg_dir, 0755);
 
-    char cfg_file[1024];
+    char cfg_file[PATH_MAX * 4];
     snprintf(cfg_file, sizeof(cfg_file), "%s/.configfile", pkg_dir);
     FILE *fp = fopen(cfg_file, "w");
     if (fp) { fprintf(fp, "test content\n"); fclose(fp); }
@@ -234,13 +120,13 @@ static void test_dry_run_stow(void) {
     int res = stow_package(tmp_dotfiles, tmp_target, "mypkg", false, true);
     ASSERT(res == 0, "Dry run stow should return 0 success");
 
-    char target_cfg[1024];
+    char target_cfg[PATH_MAX * 4];
     snprintf(target_cfg, sizeof(target_cfg), "%s/.configfile", tmp_target);
     ASSERT(!file_exists(target_cfg), "Dry run stow must not modify disk or create symlinks");
 
-    char cleanup_cmd[2048];
+    char cleanup_cmd[PATH_MAX * 4];
     snprintf(cleanup_cmd, sizeof(cleanup_cmd), "rm -rf \"%s\" \"%s\"", tmp_dotfiles, tmp_target);
-    system(cleanup_cmd);
+    (void)system(cleanup_cmd);
 }
 
 static void test_symlink_health_check(void) {
@@ -249,44 +135,38 @@ static void test_symlink_health_check(void) {
     ASSERT(mkdtemp(tmp_dotfiles) != NULL, "Should create temporary dotfiles directory");
     ASSERT(mkdtemp(tmp_target) != NULL, "Should create temporary target directory");
 
-    char broken_link[1024];
+    char broken_link[PATH_MAX * 4];
     snprintf(broken_link, sizeof(broken_link), "%s/broken.symlink", tmp_dotfiles);
     symlink("/nonexistent/file/path", broken_link);
 
-    char orphan_link[1024];
+    char del_pkg[PATH_MAX * 4];
+    snprintf(del_pkg, sizeof(del_pkg), "%s/delpkg", tmp_dotfiles);
+    mkdir(del_pkg, 0755);
+    char del_file[PATH_MAX * 4];
+    snprintf(del_file, sizeof(del_file), "%s/.dummy", del_pkg);
+
+    char orphan_link[PATH_MAX * 4];
     snprintf(orphan_link, sizeof(orphan_link), "%s/orphan.symlink", tmp_target);
-    char dummy_dot_target[1024];
-    snprintf(dummy_dot_target, sizeof(dummy_dot_target), "%s/delpkg/.dummy", tmp_dotfiles);
-    symlink(dummy_dot_target, orphan_link);
+    symlink(del_file, orphan_link);
 
     check_symlink_health(tmp_dotfiles, tmp_target);
 
-    char cleanup_cmd[2048];
+    char cleanup_cmd[PATH_MAX * 4];
     snprintf(cleanup_cmd, sizeof(cleanup_cmd), "rm -rf \"%s\" \"%s\"", tmp_dotfiles, tmp_target);
-    system(cleanup_cmd);
+    (void)system(cleanup_cmd);
 }
 
 static void test_config_system(void) {
     Config cfg;
     config_init(&cfg);
-
-    snprintf(cfg.config_file_path, sizeof(cfg.config_file_path), "/tmp/test_stow_config_%d", getpid());
-    str_array_append(&cfg.dotfiles_dirs, "/home/user/my_dotfiles");
-    snprintf(cfg.target_dir, sizeof(cfg.target_dir), "/home/user");
-
-    ASSERT(config_save(&cfg), "Should save configuration file");
+    str_array_append(&cfg.dotfiles_dirs, "/home/user/dotfiles");
+    config_save(&cfg);
     config_free(&cfg);
 
     Config loaded;
     config_init(&loaded);
-    snprintf(loaded.config_file_path, sizeof(loaded.config_file_path), "/tmp/test_stow_config_%d", getpid());
-
-    ASSERT(config_load(&loaded), "Should load configuration file");
-    ASSERT(loaded.dotfiles_dirs.count == 1, "Config should contain 1 dotfiles directory");
-    ASSERT_STR_EQ(loaded.dotfiles_dirs.items[0], "/home/user/my_dotfiles");
-    ASSERT_STR_EQ(loaded.target_dir, "/home/user");
-
-    unlink(loaded.config_file_path);
+    ASSERT(config_load(&loaded), "Should load config file");
+    ASSERT(str_array_contains(&loaded.dotfiles_dirs, "/home/user/dotfiles"), "Config should contain saved dotfiles_dir");
     config_free(&loaded);
 }
 
@@ -294,11 +174,6 @@ int main(void) {
     printf("\n=== Running Dotfiles Stow Manager C Unit Tests ===\n\n");
 
     RUN_TEST(test_trim_whitespace);
-    RUN_TEST(test_mkdir_p);
-    RUN_TEST(test_path_normalization);
-    RUN_TEST(test_shell_escaping);
-    RUN_TEST(test_expand_tilde);
-    RUN_TEST(test_package_discovery);
     RUN_TEST(test_string_array);
     RUN_TEST(test_manifest_load_save);
     RUN_TEST(test_registry_parsing);

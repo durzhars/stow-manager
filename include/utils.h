@@ -42,6 +42,12 @@ bool is_path_prefix(const char *path, const char *prefix);
 void escape_shell_arg(const char *src, char *dest, size_t dest_size);
 void expand_tilde_path(const char *path, char *out, size_t out_size);
 
+// Signal Handling & Temp Path Registration
+void setup_signal_handlers(void);
+void register_temp_path(const char *path);
+void unregister_temp_path(const char *path);
+void cleanup_temp_paths(void);
+
 typedef struct {
     char **items;
     size_t count;
