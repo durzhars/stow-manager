@@ -3,20 +3,31 @@
 #include <getopt.h>
 #include "stow.h"
 #include "scanner.h"
+#include "config.h"
 
 static void show_help(const char *prog_name) {
     printf("%sModular ANSI C Dotfiles Framework Manager%s\n", COLOR_BOLD, COLOR_RESET);
     printf("Usage: %s [options] <command> [arguments]\n\n", prog_name);
     printf("Options:\n");
+    printf("  %s-d, --dotfiles-dir%s <path>        Set dotfiles repository directory for current command\n", COLOR_CYAN, COLOR_RESET);
+    printf("  %s-t, --target-dir%s <path>          Set target home directory for current command\n", COLOR_CYAN, COLOR_RESET);
     printf("  %s-y, --install%s                  Auto-confirm installation of missing dependencies/plugins\n", COLOR_CYAN, COLOR_RESET);
+    printf("  %s-n, --dry-run%s                  Dry-run mode (preview changes without modifying disk)\n", COLOR_CYAN, COLOR_RESET);
     printf("  %s-h, --help%s                     Show this help menu\n\n", COLOR_CYAN, COLOR_RESET);
+    printf("Configuration Commands:\n");
+    printf("  %sconfig:set%s [dotfiles] <path>   Set primary dotfiles repository directory in config file\n", COLOR_CYAN, COLOR_RESET);
+    printf("  %sconfig:add%s <path>              Add additional dotfiles repository directory\n", COLOR_CYAN, COLOR_RESET);
+    printf("  %sconfig:target%s <path>           Set default target home directory in config file\n", COLOR_CYAN, COLOR_RESET);
+    printf("  %sconfig:show%s                    Display current configuration settings & paths\n\n", COLOR_CYAN, COLOR_RESET);
     printf("Dependency Management Commands (Artisan-style):\n");
     printf("  %sdeps:add%s <pkg> <dep> [--opt]   Add a dependency/conflict to package manifest\n", COLOR_CYAN, COLOR_RESET);
     printf("  %sdeps:remove%s <pkg> <dep>        Remove a dependency from package manifest\n", COLOR_CYAN, COLOR_RESET);
     printf("  %sdeps:show%s <pkg>               Display package manifest contents\n", COLOR_CYAN, COLOR_RESET);
     printf("  %smake:package%s <name>            Scaffold a new Stow package directory & manifest\n\n", COLOR_CYAN, COLOR_RESET);
     printf("Package & Stow Operations:\n");
-    printf("  %scheck%s [pkg]                    Detect missing dependencies & optional plugins\n", COLOR_CYAN, COLOR_RESET);
+    printf("  %scheck%s [pkg]                    Detect missing dependencies, plugins & broken symlinks\n", COLOR_CYAN, COLOR_RESET);
+    printf("  %scheck-symlinks%s                 Scan for broken repo symlinks & unmanaged target symlinks\n", COLOR_CYAN, COLOR_RESET);
+    printf("  %sdiff%s [pkg]                     Preview symlink creations, conflict backups, and missing deps\n", COLOR_CYAN, COLOR_RESET);
     printf("  %sscan%s [pkg]                     Recursively scan package files to auto-detect dependencies\n", COLOR_CYAN, COLOR_RESET);
     printf("  %slist%s                           List all packages and stowed status\n", COLOR_CYAN, COLOR_RESET);
     printf("  %sstow%s <pkg>                     Stow a package with auto conflict resolution\n", COLOR_CYAN, COLOR_RESET);
@@ -29,19 +40,34 @@ static void show_help(const char *prog_name) {
 
 int main(int argc, char **argv) {
     bool auto_install = false;
+    bool dry_run = false;
+    const char *cli_dotfiles_dir = NULL;
+    const char *cli_target_dir = NULL;
 
     static struct option long_options[] = {
-        {"install", no_argument, 0, 'y'},
-        {"help",    no_argument, 0, 'h'},
+        {"dotfiles-dir", required_argument, 0, 'd'},
+        {"target-dir",   required_argument, 0, 't'},
+        {"install",      no_argument,       0, 'y'},
+        {"dry-run",      no_argument,       0, 'n'},
+        {"help",         no_argument,       0, 'h'},
         {0, 0, 0, 0}
     };
 
     int opt;
     int option_index = 0;
-    while ((opt = getopt_long(argc, argv, "yh", long_options, &option_index)) != -1) {
+    while ((opt = getopt_long(argc, argv, "d:t:ynh", long_options, &option_index)) != -1) {
         switch (opt) {
+            case 'd':
+                cli_dotfiles_dir = optarg;
+                break;
+            case 't':
+                cli_target_dir = optarg;
+                break;
             case 'y':
                 auto_install = true;
+                break;
+            case 'n':
+                dry_run = true;
                 break;
             case 'h':
                 show_help(argv[0]);
@@ -60,10 +86,34 @@ int main(int argc, char **argv) {
     char dotfiles_dir[PATH_MAX];
     char target_dir[PATH_MAX];
 
-    get_dotfiles_dir(dotfiles_dir, sizeof(dotfiles_dir));
-    get_target_dir(target_dir, sizeof(target_dir));
+    get_active_dotfiles_dir(cli_dotfiles_dir, dotfiles_dir, sizeof(dotfiles_dir));
+    get_active_target_dir(cli_target_dir, target_dir, sizeof(target_dir));
 
-    if (strcmp(cmd, "deps:add") == 0) {
+    if (strcmp(cmd, "config:set") == 0 || strcmp(cmd, "config") == 0) {
+        if (optind + 1 >= argc) {
+            config_show();
+            return 0;
+        }
+        const char *arg1 = argv[optind + 1];
+        const char *path = (optind + 2 < argc) ? argv[optind + 2] : arg1;
+        config_set_dotfiles_dir(path);
+    } else if (strcmp(cmd, "config:add") == 0) {
+        if (optind + 1 >= argc) {
+            log_error("Usage: %s config:add <path>", argv[0]);
+            return 1;
+        }
+        const char *arg1 = argv[optind + 1];
+        const char *path = (optind + 2 < argc) ? argv[optind + 2] : arg1;
+        config_add_dotfiles_dir(path);
+    } else if (strcmp(cmd, "config:target") == 0) {
+        if (optind + 1 >= argc) {
+            log_error("Usage: %s config:target <path>", argv[0]);
+            return 1;
+        }
+        config_set_target_dir(argv[optind + 1]);
+    } else if (strcmp(cmd, "config:show") == 0 || strcmp(cmd, "config:list") == 0 || strcmp(cmd, "config:get") == 0) {
+        config_show();
+    } else if (strcmp(cmd, "deps:add") == 0) {
         if (optind + 2 >= argc) {
             log_error("Usage: %s deps:add <package> <dependency> [--required|--optional|--conflict]", argv[0]);
             return 1;
@@ -98,6 +148,16 @@ int main(int argc, char **argv) {
     } else if (strcmp(cmd, "check") == 0) {
         const char *pkg = (optind + 1 < argc) ? argv[optind + 1] : NULL;
         check_package_dependencies(dotfiles_dir, pkg, auto_install);
+        check_symlink_health(dotfiles_dir, target_dir);
+    } else if (strcmp(cmd, "check-symlinks") == 0 || strcmp(cmd, "check:symlinks") == 0) {
+        check_symlink_health(dotfiles_dir, target_dir);
+    } else if (strcmp(cmd, "diff") == 0) {
+        const char *pkg = (optind + 1 < argc) ? argv[optind + 1] : NULL;
+        if (pkg && strcmp(pkg, "all") != 0) {
+            stow_package(dotfiles_dir, target_dir, pkg, auto_install, true);
+        } else {
+            stow_all_packages(dotfiles_dir, target_dir, auto_install, true);
+        }
     } else if (strcmp(cmd, "scan") == 0) {
         if (optind + 1 < argc) {
             scan_package(dotfiles_dir, argv[optind + 1]);
@@ -117,23 +177,23 @@ int main(int argc, char **argv) {
             log_error("Please specify a package name to stow!");
             return 1;
         }
-        stow_package(dotfiles_dir, target_dir, argv[optind + 1], auto_install);
+        stow_package(dotfiles_dir, target_dir, argv[optind + 1], auto_install, dry_run);
     } else if (strcmp(cmd, "unstow") == 0) {
         if (optind + 1 >= argc) {
             log_error("Please specify a package name to unstow!");
             return 1;
         }
-        unstow_package(dotfiles_dir, target_dir, argv[optind + 1]);
+        unstow_package(dotfiles_dir, target_dir, argv[optind + 1], dry_run);
     } else if (strcmp(cmd, "restow") == 0) {
         if (optind + 1 >= argc) {
             log_error("Please specify a package name to restow!");
             return 1;
         }
-        restow_package(dotfiles_dir, target_dir, argv[optind + 1], auto_install);
+        restow_package(dotfiles_dir, target_dir, argv[optind + 1], auto_install, dry_run);
     } else if (strcmp(cmd, "fix-conflicts") == 0) {
-        unfold_directory_symlinks(target_dir, dotfiles_dir);
+        unfold_directory_symlinks(target_dir, dotfiles_dir, dry_run);
     } else if (strcmp(cmd, "all") == 0) {
-        stow_all_packages(dotfiles_dir, target_dir, auto_install);
+        stow_all_packages(dotfiles_dir, target_dir, auto_install, dry_run);
     } else if (strcmp(cmd, "help") == 0) {
         show_help(argv[0]);
     } else {
@@ -141,7 +201,7 @@ int main(int argc, char **argv) {
         char pkg_dir[PATH_MAX * 2];
         snprintf(pkg_dir, sizeof(pkg_dir), "%s/%s", dotfiles_dir, cmd);
         if (is_dir(pkg_dir)) {
-            stow_package(dotfiles_dir, target_dir, cmd, auto_install);
+            stow_package(dotfiles_dir, target_dir, cmd, auto_install, dry_run);
         } else {
             log_error("Unknown command or package '%s'", cmd);
             show_help(argv[0]);

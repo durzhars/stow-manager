@@ -133,3 +133,116 @@ void check_package_dependencies(const char *dotfiles_dir, const char *target_pkg
     str_array_free(&missing_opt);
     str_array_free(&all_pkgs);
 }
+
+static void scan_repo_broken_symlinks(const char *current_dir, int *broken_count) {
+    DIR *dir = opendir(current_dir);
+    if (!dir) return;
+
+    struct dirent *entry;
+    char path[PATH_MAX * 2];
+
+    while ((entry = readdir(dir)) != NULL) {
+        if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0 ||
+            strcmp(entry->d_name, ".git") == 0 || strcmp(entry->d_name, "build") == 0 ||
+            strcmp(entry->d_name, "bin") == 0) continue;
+
+        snprintf(path, sizeof(path), "%s/%s", current_dir, entry->d_name);
+
+        if (is_symlink(path)) {
+            char target[PATH_MAX];
+            ssize_t len = readlink(path, target, sizeof(target) - 1);
+            if (len != -1) {
+                target[len] = '\0';
+                char abs_target[PATH_MAX * 2];
+                if (target[0] == '/') {
+                    snprintf(abs_target, sizeof(abs_target), "%s", target);
+                } else {
+                    snprintf(abs_target, sizeof(abs_target), "%s/%s", current_dir, target);
+                }
+
+                if (!file_exists(abs_target)) {
+                    log_error("Broken symlink inside repo: %s -> %s (target missing)", path, target);
+                    (*broken_count)++;
+                }
+            }
+        } else if (is_dir(path)) {
+            scan_repo_broken_symlinks(path, broken_count);
+        }
+    }
+
+    closedir(dir);
+}
+
+typedef struct {
+    const char *dotfiles_dir;
+    int unmanaged_count;
+} UnmanagedSymlinkContext;
+
+static void scan_unmanaged_cb(const char *symlink_path, void *user_data) {
+    UnmanagedSymlinkContext *ctx = (UnmanagedSymlinkContext *)user_data;
+    size_t dotfiles_len = strlen(ctx->dotfiles_dir);
+
+    char *target = read_symlink_target(symlink_path);
+    if (target && strncmp(target, ctx->dotfiles_dir, dotfiles_len) == 0) {
+        if (!file_exists(target)) {
+            log_warn("Unmanaged / Orphan symlink: %s -> %s (target file does not exist)", symlink_path, target);
+            ctx->unmanaged_count++;
+        } else {
+            const char *rel = target + dotfiles_len;
+            if (*rel == '/') rel++;
+            char pkg_name[256] = {0};
+            const char *slash = strchr(rel, '/');
+            if (slash) {
+                size_t pkg_len = slash - rel;
+                if (pkg_len < sizeof(pkg_name)) {
+                    strncpy(pkg_name, rel, pkg_len);
+                    pkg_name[pkg_len] = '\0';
+                }
+            } else {
+                snprintf(pkg_name, sizeof(pkg_name), "%s", rel);
+            }
+
+            if (strlen(pkg_name) > 0) {
+                char pkg_dir[PATH_MAX * 2];
+                snprintf(pkg_dir, sizeof(pkg_dir), "%s/%s", ctx->dotfiles_dir, pkg_name);
+                if (!is_dir(pkg_dir)) {
+                    log_warn("Unmanaged symlink from removed package: %s -> %s (package '%s' directory missing)", symlink_path, target, pkg_name);
+                    ctx->unmanaged_count++;
+                }
+            }
+        }
+    }
+    if (target) free(target);
+}
+
+static void scan_unmanaged_target_symlinks(const char *dotfiles_dir, const char *target_dir, int *unmanaged_count) {
+    UnmanagedSymlinkContext ctx = { dotfiles_dir, 0 };
+    walk_dir_symlinks(target_dir, 1, 6, scan_unmanaged_cb, &ctx);
+    *unmanaged_count = ctx.unmanaged_count;
+}
+
+void check_symlink_health(const char *dotfiles_dir, const char *target_dir) {
+    printf("\n%s%s=== Scanning Symlink Health & Integrity ===%s\n\n", COLOR_CYAN, COLOR_BOLD, COLOR_RESET);
+
+    log_info("1. Scanning repo directory '%s' for broken symlinks...", dotfiles_dir);
+    int broken_repo_links = 0;
+    scan_repo_broken_symlinks(dotfiles_dir, &broken_repo_links);
+
+    if (broken_repo_links == 0) {
+        log_success("No broken symlinks found inside dotfiles repo!");
+    } else {
+        log_error("Found %d broken symlink(s) inside dotfiles repo!", broken_repo_links);
+    }
+
+    printf("\n");
+    log_info("2. Scanning target directory '%s' for unmanaged/orphan symlinks...", target_dir);
+    int unmanaged_target_links = 0;
+    scan_unmanaged_target_symlinks(dotfiles_dir, target_dir, &unmanaged_target_links);
+
+    if (unmanaged_target_links == 0) {
+        log_success("No unmanaged / orphan symlinks pointing to dotfiles repo!");
+    } else {
+        log_warn("Found %d unmanaged / orphan symlink(s) in target directory!", unmanaged_target_links);
+    }
+    printf("\n");
+}

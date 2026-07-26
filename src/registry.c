@@ -3,11 +3,19 @@
 #define _POSIX_C_SOURCE 200809L
 #include "registry.h"
 
-void registry_get_aliases(const char *dotfiles_dir, const char *tool, StringArray *aliases) {
+static FILE *open_registry_file(const char *dotfiles_dir) {
     char path[PATH_MAX * 2];
     snprintf(path, sizeof(path), "%s/stow.registry", dotfiles_dir);
-
     FILE *fp = fopen(path, "r");
+    if (!fp) {
+        snprintf(path, sizeof(path), "%s/.stowregistry", dotfiles_dir);
+        fp = fopen(path, "r");
+    }
+    return fp;
+}
+
+void registry_get_aliases(const char *dotfiles_dir, const char *tool, StringArray *aliases) {
+    FILE *fp = open_registry_file(dotfiles_dir);
     if (!fp) {
         str_array_append(aliases, tool);
         return;
@@ -49,10 +57,7 @@ void registry_get_aliases(const char *dotfiles_dir, const char *tool, StringArra
 void registry_get_distro_pkg(const char *dotfiles_dir, const char *tool, const char *distro, char *out, size_t out_size) {
     snprintf(out, out_size, "%s", tool);
 
-    char path[PATH_MAX * 2];
-    snprintf(path, sizeof(path), "%s/stow.registry", dotfiles_dir);
-
-    FILE *fp = fopen(path, "r");
+    FILE *fp = open_registry_file(dotfiles_dir);
     if (!fp) return;
 
     char target_key[256];
@@ -79,10 +84,7 @@ void registry_get_distro_pkg(const char *dotfiles_dir, const char *tool, const c
 }
 
 void registry_get_all_tools(const char *dotfiles_dir, StringArray *tools) {
-    char path[PATH_MAX * 2];
-    snprintf(path, sizeof(path), "%s/stow.registry", dotfiles_dir);
-
-    FILE *fp = fopen(path, "r");
+    FILE *fp = open_registry_file(dotfiles_dir);
     if (!fp) return;
 
     char line[1024];

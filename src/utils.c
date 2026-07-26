@@ -180,6 +180,64 @@ void get_all_packages(const char *dotfiles_dir, StringArray *packages) {
     closedir(dir);
 }
 
+void walk_dir_symlinks(const char *dir_path, int current_depth, int max_depth, WalkSymlinkCallback cb, void *user_data) {
+    if (!dir_path || current_depth > max_depth) return;
+
+    DIR *dir = opendir(dir_path);
+    if (!dir) return;
+
+    struct dirent *entry;
+    char path[PATH_MAX * 2];
+
+    while ((entry = readdir(dir)) != NULL) {
+        const char *name = entry->d_name;
+        if (strcmp(name, ".") == 0 || strcmp(name, "..") == 0 ||
+            strcmp(name, ".git") == 0 || strcmp(name, ".cache") == 0 ||
+            strcmp(name, "node_modules") == 0 || strcmp(name, "build") == 0 ||
+            strcmp(name, "bin") == 0) continue;
+
+        snprintf(path, sizeof(path), "%s/%s", dir_path, name);
+
+        if (is_symlink(path)) {
+            if (cb) cb(path, user_data);
+        } else if (is_dir(path) && current_depth < max_depth) {
+            walk_dir_symlinks(path, current_depth + 1, max_depth, cb, user_data);
+        }
+    }
+
+    closedir(dir);
+}
+
+void walk_dir_files(const char *base_dir, const char *current_dir, WalkFileCallback cb, void *user_data) {
+    if (!base_dir || !current_dir) return;
+
+    DIR *dir = opendir(current_dir);
+    if (!dir) return;
+
+    struct dirent *entry;
+    char path[PATH_MAX * 2];
+    size_t prefix_len = strlen(base_dir);
+
+    while ((entry = readdir(dir)) != NULL) {
+        const char *name = entry->d_name;
+        if (strcmp(name, ".") == 0 || strcmp(name, "..") == 0 ||
+            strcmp(name, ".stowdeps") == 0) continue;
+
+        snprintf(path, sizeof(path), "%s/%s", current_dir, name);
+
+        const char *rel_path = path + prefix_len;
+        if (*rel_path == '/') rel_path++;
+
+        if (is_symlink(path) || !is_dir(path)) {
+            if (cb) cb(path, rel_path, user_data);
+        } else if (is_dir(path)) {
+            walk_dir_files(base_dir, path, cb, user_data);
+        }
+    }
+
+    closedir(dir);
+}
+
 int run_system_cmd(const char *cmd) {
     return system(cmd);
 }

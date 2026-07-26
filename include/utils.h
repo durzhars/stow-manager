@@ -43,6 +43,12 @@ void get_dotfiles_dir(char *buf, size_t buf_size);
 void get_target_dir(char *buf, size_t buf_size);
 void get_all_packages(const char *dotfiles_dir, StringArray *packages);
 
+typedef void (*WalkSymlinkCallback)(const char *symlink_path, void *user_data);
+typedef void (*WalkFileCallback)(const char *file_path, const char *rel_path, void *user_data);
+
+void walk_dir_symlinks(const char *dir_path, int current_depth, int max_depth, WalkSymlinkCallback cb, void *user_data);
+void walk_dir_files(const char *base_dir, const char *current_dir, WalkFileCallback cb, void *user_data);
+
 int run_system_cmd(const char *cmd);
 
 #endif /* UTILS_H */

@@ -6,6 +6,9 @@
 #include "../include/utils.h"
 #include "../include/manifest.h"
 #include "../include/registry.h"
+#include "../include/stow.h"
+#include "../include/checker.h"
+#include "../include/config.h"
 
 static void test_trim_whitespace(void) {
     char s1[] = "  hello world  ";
@@ -99,6 +102,80 @@ static void test_registry_parsing(void) {
     system(cleanup_cmd);
 }
 
+static void test_dry_run_stow(void) {
+    char tmp_dotfiles[] = "/tmp/stow_dry_dot_XXXXXX";
+    char tmp_target[] = "/tmp/stow_dry_tgt_XXXXXX";
+    ASSERT(mkdtemp(tmp_dotfiles) != NULL, "Should create temporary dotfiles directory");
+    ASSERT(mkdtemp(tmp_target) != NULL, "Should create temporary target directory");
+
+    char pkg_dir[1024];
+    snprintf(pkg_dir, sizeof(pkg_dir), "%s/mypkg", tmp_dotfiles);
+    mkdir(pkg_dir, 0755);
+
+    char cfg_file[1024];
+    snprintf(cfg_file, sizeof(cfg_file), "%s/.configfile", pkg_dir);
+    FILE *fp = fopen(cfg_file, "w");
+    if (fp) { fprintf(fp, "test content\n"); fclose(fp); }
+
+    int res = stow_package(tmp_dotfiles, tmp_target, "mypkg", false, true);
+    ASSERT(res == 0, "Dry run stow should return 0 success");
+
+    char target_cfg[1024];
+    snprintf(target_cfg, sizeof(target_cfg), "%s/.configfile", tmp_target);
+    ASSERT(!file_exists(target_cfg), "Dry run stow must not modify disk or create symlinks");
+
+    char cleanup_cmd[2048];
+    snprintf(cleanup_cmd, sizeof(cleanup_cmd), "rm -rf \"%s\" \"%s\"", tmp_dotfiles, tmp_target);
+    system(cleanup_cmd);
+}
+
+static void test_symlink_health_check(void) {
+    char tmp_dotfiles[] = "/tmp/stow_sym_dot_XXXXXX";
+    char tmp_target[] = "/tmp/stow_sym_tgt_XXXXXX";
+    ASSERT(mkdtemp(tmp_dotfiles) != NULL, "Should create temporary dotfiles directory");
+    ASSERT(mkdtemp(tmp_target) != NULL, "Should create temporary target directory");
+
+    char broken_link[1024];
+    snprintf(broken_link, sizeof(broken_link), "%s/broken.symlink", tmp_dotfiles);
+    symlink("/nonexistent/file/path", broken_link);
+
+    char orphan_link[1024];
+    snprintf(orphan_link, sizeof(orphan_link), "%s/orphan.symlink", tmp_target);
+    char dummy_dot_target[1024];
+    snprintf(dummy_dot_target, sizeof(dummy_dot_target), "%s/delpkg/.dummy", tmp_dotfiles);
+    symlink(dummy_dot_target, orphan_link);
+
+    check_symlink_health(tmp_dotfiles, tmp_target);
+
+    char cleanup_cmd[2048];
+    snprintf(cleanup_cmd, sizeof(cleanup_cmd), "rm -rf \"%s\" \"%s\"", tmp_dotfiles, tmp_target);
+    system(cleanup_cmd);
+}
+
+static void test_config_system(void) {
+    Config cfg;
+    config_init(&cfg);
+
+    snprintf(cfg.config_file_path, sizeof(cfg.config_file_path), "/tmp/test_stow_config_%d", getpid());
+    str_array_append(&cfg.dotfiles_dirs, "/home/user/my_dotfiles");
+    snprintf(cfg.target_dir, sizeof(cfg.target_dir), "/home/user");
+
+    ASSERT(config_save(&cfg), "Should save configuration file");
+    config_free(&cfg);
+
+    Config loaded;
+    config_init(&loaded);
+    snprintf(loaded.config_file_path, sizeof(loaded.config_file_path), "/tmp/test_stow_config_%d", getpid());
+
+    ASSERT(config_load(&loaded), "Should load configuration file");
+    ASSERT(loaded.dotfiles_dirs.count == 1, "Config should contain 1 dotfiles directory");
+    ASSERT_STR_EQ(loaded.dotfiles_dirs.items[0], "/home/user/my_dotfiles");
+    ASSERT_STR_EQ(loaded.target_dir, "/home/user");
+
+    unlink(loaded.config_file_path);
+    config_free(&loaded);
+}
+
 int main(void) {
     printf("\n=== Running Dotfiles Stow Manager C Unit Tests ===\n\n");
 
@@ -106,6 +183,9 @@ int main(void) {
     RUN_TEST(test_string_array);
     RUN_TEST(test_manifest_load_save);
     RUN_TEST(test_registry_parsing);
+    RUN_TEST(test_dry_run_stow);
+    RUN_TEST(test_symlink_health_check);
+    RUN_TEST(test_config_system);
 
     printf("\n=== Test Results: %d Passed, %d Failed ===\n\n",
            g_tests_run - g_tests_failed, g_tests_failed);
