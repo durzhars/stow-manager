@@ -43,14 +43,14 @@ static const char *EMBEDDED_HELP =
 "- **`deps:show`** `<pkg>`               : Display package manifest contents\n"
 "- **`make:package`** `<name>`            : Scaffold a new Stow package directory & manifest\n\n"
 "## Package & Stow Operations\n\n"
-"- **`check`** `[pkg]`                    : Detect missing dependencies, plugins & broken symlinks\n"
+"- **`check`** `[pkg ...]`                : Detect missing dependencies, plugins & broken symlinks\n"
 "- **`check-symlinks`**                 : Scan for broken repo symlinks & unmanaged target symlinks\n"
-"- **`diff`** `[pkg]`                     : Preview symlink creations, conflict backups, and missing deps\n"
-"- **`scan`** `[pkg]`                     : Recursively scan package files to auto-detect dependencies\n"
+"- **`diff`** `[pkg ...]`                 : Preview symlink creations, conflict backups, and missing deps\n"
+"- **`scan`** `[pkg ...]`                 : Recursively scan package files to auto-detect dependencies\n"
 "- **`list`**                           : List all packages and stowed status\n"
-"- **`stow`** `<pkg>`                     : Stow a package with auto conflict resolution\n"
-"- **`unstow`** `<pkg>`                   : Unstow a package\n"
-"- **`restow`** `<pkg>`                   : Restow a package\n"
+"- **`stow`** `<pkg ...>`                 : Stow one or multiple packages with auto conflict resolution\n"
+"- **`unstow`** `<pkg ...>`               : Unstow one or multiple packages\n"
+"- **`restow`** `<pkg ...>`               : Restow one or multiple packages\n"
 "- **`fix-conflicts`**                  : Unfold directory symlinks & resolve conflicts\n"
 "- **`all`**                            : Stow all packages\n"
 "- **`help`**                           : Show this help menu\n";
@@ -414,21 +414,29 @@ int main(int argc, char **argv) {
         log_success("Created package directory & manifest for '%s'.", pkg);
         manifest_free(&manifest);
     } else if (strcmp(cmd, "check") == 0) {
-        const char *pkg = (args.count > 1) ? args.items[1] : NULL;
-        check_package_dependencies(dotfiles_dir, pkg, auto_install, dry_run);
+        if (args.count > 1) {
+            for (size_t i = 1; i < args.count; i++) {
+                check_package_dependencies(dotfiles_dir, args.items[i], auto_install, dry_run);
+            }
+        } else {
+            check_package_dependencies(dotfiles_dir, NULL, auto_install, dry_run);
+        }
         check_symlink_health(dotfiles_dir, target_dir);
     } else if (strcmp(cmd, "check-symlinks") == 0) {
         check_symlink_health(dotfiles_dir, target_dir);
     } else if (strcmp(cmd, "diff") == 0) {
-        const char *pkg = (args.count > 1) ? args.items[1] : NULL;
-        if (pkg) {
-            stow_package(dotfiles_dir, target_dir, pkg, auto_install, true);
+        if (args.count > 1) {
+            for (size_t i = 1; i < args.count; i++) {
+                stow_package(dotfiles_dir, target_dir, args.items[i], auto_install, true);
+            }
         } else {
             stow_all_packages(dotfiles_dir, target_dir, auto_install, true);
         }
     } else if (strcmp(cmd, "scan") == 0) {
         if (args.count > 1) {
-            scan_package(dotfiles_dir, args.items[1]);
+            for (size_t i = 1; i < args.count; i++) {
+                scan_package(dotfiles_dir, args.items[i]);
+            }
         } else {
             StringArray pkgs;
             str_array_init(&pkgs);
@@ -442,25 +450,31 @@ int main(int argc, char **argv) {
         list_packages_status(dotfiles_dir, target_dir);
     } else if (strcmp(cmd, "stow") == 0) {
         if (args.count < 2) {
-            log_error("Please specify a package name to stow!");
+            log_error("Please specify at least one package name to stow!");
             str_array_free(&args);
             return 1;
         }
-        stow_package(dotfiles_dir, target_dir, args.items[1], auto_install, dry_run);
+        for (size_t i = 1; i < args.count; i++) {
+            stow_package(dotfiles_dir, target_dir, args.items[i], auto_install, dry_run);
+        }
     } else if (strcmp(cmd, "unstow") == 0) {
         if (args.count < 2) {
-            log_error("Please specify a package name to unstow!");
+            log_error("Please specify at least one package name to unstow!");
             str_array_free(&args);
             return 1;
         }
-        unstow_package(dotfiles_dir, target_dir, args.items[1], dry_run);
+        for (size_t i = 1; i < args.count; i++) {
+            unstow_package(dotfiles_dir, target_dir, args.items[i], dry_run);
+        }
     } else if (strcmp(cmd, "restow") == 0) {
         if (args.count < 2) {
-            log_error("Please specify a package name to restow!");
+            log_error("Please specify at least one package name to restow!");
             str_array_free(&args);
             return 1;
         }
-        restow_package(dotfiles_dir, target_dir, args.items[1], auto_install, dry_run);
+        for (size_t i = 1; i < args.count; i++) {
+            restow_package(dotfiles_dir, target_dir, args.items[i], auto_install, dry_run);
+        }
     } else if (strcmp(cmd, "fix-conflicts") == 0) {
         unfold_directory_symlinks(target_dir, dotfiles_dir, dry_run);
     } else if (strcmp(cmd, "all") == 0) {
@@ -468,10 +482,19 @@ int main(int argc, char **argv) {
     } else if (strcmp(cmd, "help") == 0) {
         show_help();
     } else {
-        char pkg_dir[PATH_MAX * 2];
-        join_path(pkg_dir, sizeof(pkg_dir), dotfiles_dir, cmd);
-        if (is_dir(pkg_dir)) {
-            stow_package(dotfiles_dir, target_dir, cmd, auto_install, dry_run);
+        bool all_valid = true;
+        for (size_t i = 0; i < args.count; i++) {
+            char pkg_dir[PATH_MAX * 2];
+            join_path(pkg_dir, sizeof(pkg_dir), dotfiles_dir, args.items[i]);
+            if (!is_dir(pkg_dir)) {
+                all_valid = false;
+                break;
+            }
+        }
+        if (all_valid) {
+            for (size_t i = 0; i < args.count; i++) {
+                stow_package(dotfiles_dir, target_dir, args.items[i], auto_install, dry_run);
+            }
         } else {
             log_error("Unknown command or package '%s'", cmd);
             show_help();

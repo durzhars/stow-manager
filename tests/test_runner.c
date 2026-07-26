@@ -72,6 +72,44 @@ static void test_xdg_paths(void) {
     str_array_free(&data_dirs);
 }
 
+static void test_stowignore(void) {
+    char tmp_dir[] = "/tmp/stow_ignore_XXXXXX";
+    ASSERT(mkdtemp(tmp_dir) != NULL, "Should create temporary directory for stowignore test");
+
+    char ignore_file[PATH_MAX * 2];
+    snprintf(ignore_file, sizeof(ignore_file), "%s/.stowignore", tmp_dir);
+    FILE *fp = fopen(ignore_file, "w");
+    ASSERT(fp != NULL, "Should create .stowignore file");
+    fprintf(fp, "# Comment line\nREADME.md\n*.bak\n");
+    fclose(fp);
+
+    StringArray patterns;
+    str_array_init(&patterns);
+    parse_stowignore(tmp_dir, &patterns);
+
+    ASSERT(str_array_contains(&patterns, "README\\.md"), ".stowignore should contain escaped README\\.md");
+    ASSERT(str_array_contains(&patterns, ".*\\.bak"), ".stowignore should contain escaped .*\\.bak");
+    str_array_free(&patterns);
+
+    char rm_cmd[PATH_MAX * 2];
+    snprintf(rm_cmd, sizeof(rm_cmd), "rm -rf \"%s\"", tmp_dir);
+    (void)system(rm_cmd);
+}
+
+static void test_safe_allocators(void) {
+    char *ptr = safe_malloc(100);
+    ASSERT(ptr != NULL, "safe_malloc should return non-null pointer");
+    strcpy(ptr, "testing safe_malloc");
+    ASSERT_STR_EQ(ptr, "testing safe_malloc");
+
+    char *dup = safe_strdup(ptr);
+    ASSERT(dup != NULL, "safe_strdup should return non-null pointer");
+    ASSERT_STR_EQ(dup, "testing safe_malloc");
+
+    free(ptr);
+    free(dup);
+}
+
 static void test_manifest_load_save(void) {
     char tmp_dir[] = "/tmp/stow_test_XXXXXX";
     ASSERT(mkdtemp(tmp_dir) != NULL, "Should create temporary test directory");
@@ -217,6 +255,8 @@ int main(void) {
     RUN_TEST(test_trim_whitespace);
     RUN_TEST(test_string_array);
     RUN_TEST(test_xdg_paths);
+    RUN_TEST(test_stowignore);
+    RUN_TEST(test_safe_allocators);
     RUN_TEST(test_manifest_load_save);
     RUN_TEST(test_registry_parsing);
     RUN_TEST(test_dry_run_stow);

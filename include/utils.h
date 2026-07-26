@@ -35,6 +35,7 @@
 #include <sys/types.h>
 #include <dirent.h>
 #include <limits.h>
+#include <signal.h>
 #include "logger.h"
 
 #define COLOR_RED     "\033[0;31m"
@@ -44,6 +45,15 @@
 #define COLOR_CYAN    "\033[0;36m"
 #define COLOR_BOLD    "\033[1m"
 #define COLOR_RESET   "\033[0m"
+
+// Async Signal Interrupt Flag
+extern volatile sig_atomic_t g_interrupted;
+
+// Safe Memory Allocation Validators
+void *safe_malloc(size_t size);
+void *safe_calloc(size_t num, size_t size);
+void *safe_realloc(void *ptr, size_t size);
+char *safe_strdup(const char *s);
 
 typedef struct {
     char **items;
@@ -84,6 +94,7 @@ void setup_signal_handlers(void);
 void register_temp_path(const char *path);
 void unregister_temp_path(const char *path);
 void cleanup_temp_paths(void);
+void cleanup_temp_paths_signal_safe(void);
 
 void get_dotfiles_dir(char *buf, size_t buf_size);
 void get_target_dir(char *buf, size_t buf_size);

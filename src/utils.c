@@ -23,9 +23,57 @@
 #include <stdarg.h>
 #include <ctype.h>
 #include <errno.h>
-#include <signal.h>
+
+volatile sig_atomic_t g_interrupted = 0;
+
+#define MAX_SIGNAL_TEMP_PATHS 64
+static char g_signal_temp_paths[MAX_SIGNAL_TEMP_PATHS][PATH_MAX];
+static volatile sig_atomic_t g_signal_temp_count = 0;
 
 static StringArray g_temp_paths = {NULL, 0, 0};
+
+void *safe_malloc(size_t size) {
+    if (size == 0) return NULL;
+    void *ptr = malloc(size);
+    if (!ptr) {
+        log_error("Out of memory! Failed to allocate %zu bytes", size);
+        exit(EXIT_FAILURE);
+    }
+    return ptr;
+}
+
+void *safe_calloc(size_t num, size_t size) {
+    if (num == 0 || size == 0) return NULL;
+    void *ptr = calloc(num, size);
+    if (!ptr) {
+        log_error("Out of memory! Failed to allocate %zu x %zu bytes", num, size);
+        exit(EXIT_FAILURE);
+    }
+    return ptr;
+}
+
+void *safe_realloc(void *ptr, size_t size) {
+    if (size == 0) {
+        free(ptr);
+        return NULL;
+    }
+    void *new_ptr = realloc(ptr, size);
+    if (!new_ptr) {
+        log_error("Out of memory! Failed to reallocate %zu bytes", size);
+        exit(EXIT_FAILURE);
+    }
+    return new_ptr;
+}
+
+char *safe_strdup(const char *s) {
+    if (!s) return NULL;
+    char *dup = strdup(s);
+    if (!dup) {
+        log_error("Out of memory! Failed to duplicate string");
+        exit(EXIT_FAILURE);
+    }
+    return dup;
+}
 
 void get_xdg_config_home(char *buf, size_t buf_size) {
     const char *env = getenv("XDG_CONFIG_HOME");
@@ -88,8 +136,7 @@ void get_xdg_data_dirs(StringArray *dirs) {
     if (!env || strlen(env) == 0) {
         env = "/usr/local/share:/usr/share";
     }
-    char *copy = strdup(env);
-    if (!copy) return;
+    char *copy = safe_strdup(env);
 
     char *saveptr = NULL;
     char *token = strtok_r(copy, ":", &saveptr);
@@ -107,8 +154,7 @@ void get_xdg_config_dirs(StringArray *dirs) {
     if (!env || strlen(env) == 0) {
         env = "/etc/xdg";
     }
-    char *copy = strdup(env);
-    if (!copy) return;
+    char *copy = safe_strdup(env);
 
     char *saveptr = NULL;
     char *token = strtok_r(copy, ":", &saveptr);
@@ -126,6 +172,11 @@ void register_temp_path(const char *path) {
     if (!str_array_contains(&g_temp_paths, path)) {
         str_array_append(&g_temp_paths, path);
     }
+
+    if (g_signal_temp_count < MAX_SIGNAL_TEMP_PATHS) {
+        snprintf(g_signal_temp_paths[g_signal_temp_count], sizeof(g_signal_temp_paths[0]), "%s", path);
+        g_signal_temp_count++;
+    }
 }
 
 void unregister_temp_path(const char *path) {
@@ -139,6 +190,12 @@ void unregister_temp_path(const char *path) {
     }
     str_array_free(&g_temp_paths);
     g_temp_paths = new_paths;
+
+    for (sig_atomic_t i = 0; i < g_signal_temp_count; i++) {
+        if (strcmp(g_signal_temp_paths[i], path) == 0) {
+            g_signal_temp_paths[i][0] = '\0';
+        }
+    }
 }
 
 void cleanup_temp_paths(void) {
@@ -155,10 +212,21 @@ void cleanup_temp_paths(void) {
     str_array_free(&g_temp_paths);
 }
 
+void cleanup_temp_paths_signal_safe(void) {
+    for (sig_atomic_t i = 0; i < g_signal_temp_count; i++) {
+        const char *p = g_signal_temp_paths[i];
+        if (p && p[0] != '\0') {
+            (void)unlink(p);
+            (void)rmdir(p);
+        }
+    }
+}
+
 static void handle_signal_interrupt(int sig) {
-    (void)sig;
-    log_warn("\nOperation interrupted by user (SIGINT / Ctrl+C). Cleaning up temporary files...");
-    cleanup_temp_paths();
+    g_interrupted = sig;
+    const char msg[] = "\n[WARNING] Operation interrupted by signal (Ctrl+C). Cleaning up temporary files...\n";
+    (void)write(STDERR_FILENO, msg, sizeof(msg) - 1);
+    cleanup_temp_paths_signal_safe();
     _exit(128 + sig);
 }
 
@@ -216,8 +284,7 @@ bool is_executable_in_path(const char *executable) {
     const char *path_env = getenv("PATH");
     if (!path_env) return false;
 
-    char *path_copy = strdup(path_env);
-    if (!path_copy) return false;
+    char *path_copy = safe_strdup(path_env);
 
     char *token = strtok(path_copy, ":");
     bool found = false;
@@ -283,7 +350,7 @@ void collapse_path(char *path) {
 char *read_symlink_target(const char *path) {
     char resolved[PATH_MAX * 2];
     if (realpath(path, resolved)) {
-        return strdup(resolved);
+        return safe_strdup(resolved);
     }
 
     char target[PATH_MAX * 2];
@@ -305,12 +372,12 @@ char *read_symlink_target(const char *path) {
 
             char real_abs[PATH_MAX * 2];
             if (realpath(abs_target, real_abs) != NULL) {
-                return strdup(real_abs);
+                return safe_strdup(real_abs);
             }
             normalize_path(abs_target);
-            return strdup(abs_target);
+            return safe_strdup(abs_target);
         }
-        return strdup(target);
+        return safe_strdup(target);
     }
     return NULL;
 }
@@ -429,12 +496,11 @@ void str_array_append(StringArray *arr, const char *str) {
     if (!str || strlen(str) == 0) return;
     if (arr->count >= arr->capacity) {
         size_t new_cap = (arr->capacity == 0) ? 8 : arr->capacity * 2;
-        char **new_items = realloc(arr->items, new_cap * sizeof(char *));
-        if (!new_items) return;
+        char **new_items = safe_realloc(arr->items, new_cap * sizeof(char *));
         arr->items = new_items;
         arr->capacity = new_cap;
     }
-    arr->items[arr->count++] = strdup(str);
+    arr->items[arr->count++] = safe_strdup(str);
 }
 
 bool str_array_contains(const StringArray *arr, const char *str) {
