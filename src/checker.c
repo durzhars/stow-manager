@@ -5,13 +5,24 @@
 #include "registry.h"
 #include <termios.h>
 
+static void flush_stdin(void) {
+    int c;
+    while ((c = getchar()) != '\n' && c != EOF);
+}
+
 static void build_install_command(const char *dotfiles_dir, const char *distro, const StringArray *pkgs, char *cmd, size_t cmd_size) {
-    char pkg_list[1024] = {0};
+    char pkg_list[2048] = {0};
+    size_t offset = 0;
     for (size_t i = 0; i < pkgs->count; i++) {
         char distro_pkg[256];
         registry_get_distro_pkg(dotfiles_dir, pkgs->items[i], distro, distro_pkg, sizeof(distro_pkg));
-        strcat(pkg_list, distro_pkg);
-        if (i + 1 < pkgs->count) strcat(pkg_list, " ");
+        int written = snprintf(pkg_list + offset, sizeof(pkg_list) - offset, "%s%s",
+                               distro_pkg, (i + 1 < pkgs->count) ? " " : "");
+        if (written > 0 && (size_t)written < sizeof(pkg_list) - offset) {
+            offset += (size_t)written;
+        } else {
+            break;
+        }
     }
 
     if (strcmp(distro, "arch") == 0 || strcmp(distro, "manjaro") == 0 || strcmp(distro, "endeavouros") == 0) {
@@ -91,7 +102,7 @@ void check_package_dependencies(const char *dotfiles_dir, const char *target_pkg
 
     if (missing_req.count > 0) {
         log_error("Missing REQUIRED dependencies!");
-        char install_cmd[1024];
+        char install_cmd[4096];
         build_install_command(dotfiles_dir, distro, &missing_req, install_cmd, sizeof(install_cmd));
         printf("%sInstallation Command (%s):%s %s%s%s\n\n", COLOR_BOLD, distro, COLOR_RESET, COLOR_CYAN, install_cmd, COLOR_RESET);
 
@@ -103,6 +114,7 @@ void check_package_dependencies(const char *dotfiles_dir, const char *target_pkg
             printf("Would you like to install missing REQUIRED dependencies now? [Y/n] ");
             fflush(stdout);
             int c = getchar();
+            if (c != '\n' && c != EOF) flush_stdin();
             if (c == 'y' || c == 'Y' || c == '\n') {
                 run_system_cmd(install_cmd);
             }
@@ -111,7 +123,7 @@ void check_package_dependencies(const char *dotfiles_dir, const char *target_pkg
 
     if (missing_opt.count > 0) {
         log_warn("Missing OPTIONAL plugins & tools!");
-        char install_cmd[1024];
+        char install_cmd[4096];
         build_install_command(dotfiles_dir, distro, &missing_opt, install_cmd, sizeof(install_cmd));
         printf("%sInstallation Command (%s):%s %s%s%s\n\n", COLOR_BOLD, distro, COLOR_RESET, COLOR_CYAN, install_cmd, COLOR_RESET);
 
@@ -123,6 +135,7 @@ void check_package_dependencies(const char *dotfiles_dir, const char *target_pkg
             printf("Would you like to install missing OPTIONAL plugins & tools now? [y/N] ");
             fflush(stdout);
             int c = getchar();
+            if (c != '\n' && c != EOF) flush_stdin();
             if (c == 'y' || c == 'Y') {
                 run_system_cmd(install_cmd);
             }
