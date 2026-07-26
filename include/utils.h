@@ -27,6 +27,9 @@ bool is_symlink(const char *path);
 bool is_executable_in_path(const char *executable);
 char *read_symlink_target(const char *path);
 void get_distro_id(char *buf, size_t buf_size);
+void normalize_path(char *path);
+void join_path(char *out, size_t out_size, const char *dir, const char *rel);
+int mkdir_p(const char *path, mode_t mode);
 
 typedef struct {
     char **items;

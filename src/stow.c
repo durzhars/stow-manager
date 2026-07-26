@@ -58,12 +58,16 @@ typedef struct {
     const char *pkg_dir;
     const char *timestamp;
     bool dry_run;
+    size_t create_count;
+    size_t replace_count;
+    size_t backup_count;
+    size_t unchanged_count;
 } PrepareConflictContext;
 
 static void prepare_conflict_cb(const char *file_path, const char *rel_path, void *user_data) {
     PrepareConflictContext *ctx = (PrepareConflictContext *)user_data;
     char target_path[PATH_MAX];
-    snprintf(target_path, sizeof(target_path), "%s/%s", ctx->target_dir, rel_path);
+    join_path(target_path, sizeof(target_path), ctx->target_dir, rel_path);
 
     char parent_dir[PATH_MAX];
     snprintf(parent_dir, sizeof(parent_dir), "%s", target_path);
@@ -74,27 +78,34 @@ static void prepare_conflict_cb(const char *file_path, const char *rel_path, voi
             if (ctx->dry_run) {
                 log_info("[DRY-RUN] Would create directory: %s", parent_dir);
             } else {
-                char mkdir_cmd[PATH_MAX + 32];
-                snprintf(mkdir_cmd, sizeof(mkdir_cmd), "mkdir -p \"%s\"", parent_dir);
-                run_system_cmd(mkdir_cmd);
+                mkdir_p(parent_dir, 0755);
             }
         }
     }
 
     if (is_symlink(target_path)) {
-        if (ctx->dry_run) {
-            char *link_dest = read_symlink_target(target_path);
-            if (link_dest && strcmp(link_dest, file_path) == 0) {
-                log_info("[DRY-RUN] Symlink already configured: %s -> %s", target_path, file_path);
-            } else {
-                log_warn("[DRY-RUN] Would replace existing symlink: %s", target_path);
+        char *link_dest = read_symlink_target(target_path);
+        if (link_dest && strcmp(link_dest, file_path) == 0) {
+            ctx->unchanged_count++;
+            if (ctx->dry_run) {
+                if (ctx->unchanged_count <= 3) {
+                    log_info("[DRY-RUN] Symlink already configured: %s -> %s", target_path, file_path);
+                } else if (ctx->unchanged_count == 4) {
+                    log_info("[DRY-RUN] ... (further unchanged symlinks truncated)");
+                }
             }
-            if (link_dest) free(link_dest);
         } else {
-            log_info("Removing existing symlink: %s", target_path);
-            unlink(target_path);
+            ctx->replace_count++;
+            if (ctx->dry_run) {
+                log_warn("[DRY-RUN] Would replace existing symlink: %s -> %s", target_path, file_path);
+            } else {
+                log_info("Removing existing symlink: %s", target_path);
+                unlink(target_path);
+            }
         }
+        if (link_dest) free(link_dest);
     } else if (file_exists(target_path)) {
+        ctx->backup_count++;
         char backup_path[PATH_MAX + 64];
         snprintf(backup_path, sizeof(backup_path), "%s.bak.%s", target_path, ctx->timestamp);
         if (ctx->dry_run) {
@@ -103,14 +114,17 @@ static void prepare_conflict_cb(const char *file_path, const char *rel_path, voi
             log_warn("Backing up unmanaged file conflict: %s -> %s", target_path, backup_path);
             rename(target_path, backup_path);
         }
-    } else if (ctx->dry_run) {
-        log_info("[DRY-RUN] Would create symlink: %s -> %s", target_path, file_path);
+    } else {
+        ctx->create_count++;
+        if (ctx->dry_run) {
+            log_info("[DRY-RUN] Would create symlink: %s -> %s", target_path, file_path);
+        }
     }
 }
 
 void prepare_target_conflicts(const char *target_dir, const char *dotfiles_dir, const char *pkg_name, bool dry_run) {
     char pkg_dir[PATH_MAX];
-    snprintf(pkg_dir, sizeof(pkg_dir), "%s/%s", dotfiles_dir, pkg_name);
+    join_path(pkg_dir, sizeof(pkg_dir), dotfiles_dir, pkg_name);
 
     if (!is_dir(pkg_dir)) return;
 
@@ -123,8 +137,16 @@ void prepare_target_conflicts(const char *target_dir, const char *dotfiles_dir, 
     char timestamp[32];
     get_timestamp_str(timestamp, sizeof(timestamp));
 
-    PrepareConflictContext ctx = { target_dir, pkg_dir, timestamp, dry_run };
+    PrepareConflictContext ctx = { target_dir, pkg_dir, timestamp, dry_run, 0, 0, 0, 0 };
     walk_dir_files(pkg_dir, pkg_dir, prepare_conflict_cb, &ctx);
+
+    if (dry_run) {
+        if (ctx.unchanged_count > 3) {
+            log_info("[DRY-RUN] Total %zu unchanged symlinks verified.", ctx.unchanged_count);
+        }
+        log_success("[DRY-RUN] Target preview summary for package '%s': %zu to create, %zu to replace, %zu to back up, %zu unchanged.",
+                    pkg_name, ctx.create_count, ctx.replace_count, ctx.backup_count, ctx.unchanged_count);
+    }
 }
 
 typedef struct {
@@ -139,7 +161,7 @@ static void is_stowed_cb(const char *file_path, const char *rel_path, void *user
     if (ctx->stowed) return;
 
     char target_path[PATH_MAX];
-    snprintf(target_path, sizeof(target_path), "%s/%s", ctx->target_dir, rel_path);
+    join_path(target_path, sizeof(target_path), ctx->target_dir, rel_path);
 
     if (is_symlink(target_path)) {
         char *link_dest = read_symlink_target(target_path);

@@ -9,13 +9,13 @@
 char *trim_whitespace(char *str) {
     if (!str) return NULL;
     while (isspace((unsigned char)*str)) str++;
-    if (*str == 0) return str;
+    if (*str == '\0') return str;
 
     char *end = str + strlen(str) - 1;
     while (end > str && isspace((unsigned char)*end)) end--;
     end[1] = '\0';
 
-    if ((*str == '"' && end[0] == '"') || (*str == '\'' && end[0] == '\'')) {
+    if (end > str && ((*str == '"' && end[0] == '"') || (*str == '\'' && end[0] == '\''))) {
         str++;
         end[0] = '\0';
     }
@@ -103,6 +103,69 @@ void get_distro_id(char *buf, size_t buf_size) {
     snprintf(buf, buf_size, "unknown");
 }
 
+void normalize_path(char *path) {
+    if (!path) return;
+    size_t len = strlen(path);
+    while (len > 1 && path[len - 1] == '/') {
+        path[--len] = '\0';
+    }
+}
+
+void join_path(char *out, size_t out_size, const char *dir, const char *rel) {
+    if (!dir || strlen(dir) == 0) {
+        snprintf(out, out_size, "%s", rel ? rel : "");
+        normalize_path(out);
+        return;
+    }
+    if (!rel || strlen(rel) == 0) {
+        snprintf(out, out_size, "%s", dir);
+        normalize_path(out);
+        return;
+    }
+
+    char clean_dir[PATH_MAX];
+    snprintf(clean_dir, sizeof(clean_dir), "%s", dir);
+    normalize_path(clean_dir);
+
+    while (*rel == '/') rel++;
+
+    snprintf(out, out_size, "%s/%s", clean_dir, rel);
+}
+
+int mkdir_p(const char *path, mode_t mode) {
+    if (!path || strlen(path) == 0) return -1;
+
+    char temp[PATH_MAX];
+    snprintf(temp, sizeof(temp), "%s", path);
+    normalize_path(temp);
+    size_t len = strlen(temp);
+
+    if (len == 0) return 0;
+
+    char *p = temp;
+    if (*p == '/') p++;
+
+    for (; *p; p++) {
+        if (*p == '/') {
+            *p = '\0';
+            if (strlen(temp) > 0 && !is_dir(temp)) {
+                if (mkdir(temp, mode) != 0 && errno != EEXIST) {
+                    return -1;
+                }
+            }
+            *p = '/';
+        }
+    }
+
+    if (strlen(temp) > 0 && !is_dir(temp)) {
+        if (mkdir(temp, mode) != 0 && errno != EEXIST) {
+            return -1;
+        }
+    }
+
+    return 0;
+}
+
 void str_array_init(StringArray *arr) {
     arr->items = NULL;
     arr->count = 0;
@@ -147,6 +210,7 @@ void get_dotfiles_dir(char *buf, size_t buf_size) {
     } else {
         snprintf(buf, buf_size, ".");
     }
+    normalize_path(buf);
 }
 
 void get_target_dir(char *buf, size_t buf_size) {
@@ -156,6 +220,7 @@ void get_target_dir(char *buf, size_t buf_size) {
     } else {
         snprintf(buf, buf_size, "/tmp");
     }
+    normalize_path(buf);
 }
 
 void get_all_packages(const char *dotfiles_dir, StringArray *packages) {

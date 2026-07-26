@@ -6,12 +6,22 @@
 #include <termios.h>
 
 static void build_install_command(const char *dotfiles_dir, const char *distro, const StringArray *pkgs, char *cmd, size_t cmd_size) {
-    char pkg_list[1024] = {0};
+    char pkg_list[2048] = {0};
+    size_t offset = 0;
+
     for (size_t i = 0; i < pkgs->count; i++) {
         char distro_pkg[256];
         registry_get_distro_pkg(dotfiles_dir, pkgs->items[i], distro, distro_pkg, sizeof(distro_pkg));
-        strcat(pkg_list, distro_pkg);
-        if (i + 1 < pkgs->count) strcat(pkg_list, " ");
+
+        if (offset < sizeof(pkg_list)) {
+            int written = snprintf(pkg_list + offset, sizeof(pkg_list) - offset, "%s%s",
+                                   distro_pkg, (i + 1 < pkgs->count) ? " " : "");
+            if (written > 0 && (size_t)written < sizeof(pkg_list) - offset) {
+                offset += (size_t)written;
+            } else {
+                break;
+            }
+        }
     }
 
     if (strcmp(distro, "arch") == 0 || strcmp(distro, "manjaro") == 0 || strcmp(distro, "endeavouros") == 0) {

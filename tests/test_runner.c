@@ -19,6 +19,48 @@ static void test_trim_whitespace(void) {
 
     char s3[] = "\t\n  ";
     ASSERT_STR_EQ(trim_whitespace(s3), "");
+
+    char s4[] = "\"";
+    ASSERT_STR_EQ(trim_whitespace(s4), "\"");
+
+    char s5[] = "'";
+    ASSERT_STR_EQ(trim_whitespace(s5), "'");
+}
+
+static void test_mkdir_p(void) {
+    char tmp_dir[] = "/tmp/stow_mkdir_XXXXXX";
+    ASSERT(mkdtemp(tmp_dir) != NULL, "Should create temporary directory");
+
+    char nested[1024];
+    snprintf(nested, sizeof(nested), "%s/level1/level2/level3", tmp_dir);
+
+    ASSERT(mkdir_p(nested, 0755) == 0, "mkdir_p should succeed creating nested directories");
+    ASSERT(is_dir(nested), "Nested directory level3 should exist");
+
+    char cleanup_cmd[2048];
+    snprintf(cleanup_cmd, sizeof(cleanup_cmd), "rm -rf \"%s\"", tmp_dir);
+    system(cleanup_cmd);
+}
+
+static void test_path_normalization(void) {
+    char p1[1024] = "/home/user/";
+    normalize_path(p1);
+    ASSERT_STR_EQ(p1, "/home/user");
+
+    char p2[1024] = "/home/user///";
+    normalize_path(p2);
+    ASSERT_STR_EQ(p2, "/home/user");
+
+    char p3[1024] = "/";
+    normalize_path(p3);
+    ASSERT_STR_EQ(p3, "/");
+
+    char out[1024];
+    join_path(out, sizeof(out), "/home/user/", "/.config/nvim");
+    ASSERT_STR_EQ(out, "/home/user/.config/nvim");
+
+    join_path(out, sizeof(out), "/home/user", ".config/nvim");
+    ASSERT_STR_EQ(out, "/home/user/.config/nvim");
 }
 
 static void test_string_array(void) {
@@ -180,6 +222,8 @@ int main(void) {
     printf("\n=== Running Dotfiles Stow Manager C Unit Tests ===\n\n");
 
     RUN_TEST(test_trim_whitespace);
+    RUN_TEST(test_mkdir_p);
+    RUN_TEST(test_path_normalization);
     RUN_TEST(test_string_array);
     RUN_TEST(test_manifest_load_save);
     RUN_TEST(test_registry_parsing);

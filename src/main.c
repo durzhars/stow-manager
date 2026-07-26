@@ -19,7 +19,7 @@ static void show_help(const char *prog_name) {
     printf("  %sconfig:add%s <path>              Add additional dotfiles repository directory\n", COLOR_CYAN, COLOR_RESET);
     printf("  %sconfig:target%s <path>           Set default target home directory in config file\n", COLOR_CYAN, COLOR_RESET);
     printf("  %sconfig:show%s                    Display current configuration settings & paths\n\n", COLOR_CYAN, COLOR_RESET);
-    printf("Dependency Management Commands (Artisan-style):\n");
+    printf("Dependency Management Commands:\n");
     printf("  %sdeps:add%s <pkg> <dep> [--opt]   Add a dependency/conflict to package manifest\n", COLOR_CYAN, COLOR_RESET);
     printf("  %sdeps:remove%s <pkg> <dep>        Remove a dependency from package manifest\n", COLOR_CYAN, COLOR_RESET);
     printf("  %sdeps:show%s <pkg>               Display package manifest contents\n", COLOR_CYAN, COLOR_RESET);
@@ -36,6 +36,115 @@ static void show_help(const char *prog_name) {
     printf("  %sfix-conflicts%s                  Unfold directory symlinks & resolve conflicts\n", COLOR_CYAN, COLOR_RESET);
     printf("  %sall%s                            Stow all packages\n", COLOR_CYAN, COLOR_RESET);
     printf("  %shelp%s                           Show this help menu\n", COLOR_CYAN, COLOR_RESET);
+}
+
+static void handle_config_command(int argc, char **argv, int optind) {
+    const char *cmd = argv[optind];
+    int remaining = argc - optind - 1;
+
+    if (strcmp(cmd, "config:show") == 0 || strcmp(cmd, "config:list") == 0 || strcmp(cmd, "config:get") == 0) {
+        config_show();
+        return;
+    }
+
+    if (strcmp(cmd, "config:target") == 0) {
+        if (remaining < 1) {
+            log_error("Usage: %s config:target <path>", argv[0]);
+            return;
+        }
+        config_set_target_dir(argv[optind + 1]);
+        return;
+    }
+
+    if (strcmp(cmd, "config:add") == 0) {
+        if (remaining < 1) {
+            log_error("Usage: %s config:add <path>", argv[0]);
+            return;
+        }
+        const char *path = argv[optind + 1];
+        if (remaining >= 2 && (strcmp(path, "dotfiles") == 0 || strcmp(path, "repo") == 0)) {
+            path = argv[optind + 2];
+        }
+        config_add_dotfiles_dir(path);
+        return;
+    }
+
+    if (strcmp(cmd, "config:set") == 0 || strcmp(cmd, "config") == 0) {
+        if (remaining == 0) {
+            config_show();
+            return;
+        }
+
+        const char *sub = argv[optind + 1];
+
+        if (strcmp(sub, "show") == 0 || strcmp(sub, "list") == 0 || strcmp(sub, "get") == 0) {
+            config_show();
+            return;
+        }
+
+        if (strcmp(sub, "set") == 0) {
+            if (remaining < 2) {
+                log_error("Usage: %s config set [dotfiles|target] <path>", argv[0]);
+                return;
+            }
+            const char *key_or_path = argv[optind + 2];
+            if (strcmp(key_or_path, "target") == 0) {
+                if (remaining < 3) {
+                    log_error("Usage: %s config set target <path>", argv[0]);
+                    return;
+                }
+                config_set_target_dir(argv[optind + 3]);
+            } else if (strcmp(key_or_path, "dotfiles") == 0 || strcmp(key_or_path, "repo") == 0) {
+                if (remaining < 3) {
+                    log_error("Usage: %s config set dotfiles <path>", argv[0]);
+                    return;
+                }
+                config_set_dotfiles_dir(argv[optind + 3]);
+            } else {
+                config_set_dotfiles_dir(key_or_path);
+            }
+            return;
+        }
+
+        if (strcmp(sub, "add") == 0) {
+            if (remaining < 2) {
+                log_error("Usage: %s config add <path>", argv[0]);
+                return;
+            }
+            const char *key_or_path = argv[optind + 2];
+            if (strcmp(key_or_path, "dotfiles") == 0 || strcmp(key_or_path, "repo") == 0) {
+                if (remaining < 3) {
+                    log_error("Usage: %s config add <path>", argv[0]);
+                    return;
+                }
+                config_add_dotfiles_dir(argv[optind + 3]);
+            } else {
+                config_add_dotfiles_dir(key_or_path);
+            }
+            return;
+        }
+
+        if (strcmp(sub, "target") == 0) {
+            if (remaining < 2) {
+                log_error("Usage: %s config target <path>", argv[0]);
+                return;
+            }
+            config_set_target_dir(argv[optind + 2]);
+            return;
+        }
+
+        if (strcmp(sub, "dotfiles") == 0 || strcmp(sub, "repo") == 0) {
+            if (remaining < 2) {
+                log_error("Usage: %s config dotfiles <path>", argv[0]);
+                return;
+            }
+            config_set_dotfiles_dir(argv[optind + 2]);
+            return;
+        }
+
+        config_set_dotfiles_dir(sub);
+        return;
+    }
 }
 
 int main(int argc, char **argv) {
@@ -89,30 +198,9 @@ int main(int argc, char **argv) {
     get_active_dotfiles_dir(cli_dotfiles_dir, dotfiles_dir, sizeof(dotfiles_dir));
     get_active_target_dir(cli_target_dir, target_dir, sizeof(target_dir));
 
-    if (strcmp(cmd, "config:set") == 0 || strcmp(cmd, "config") == 0) {
-        if (optind + 1 >= argc) {
-            config_show();
-            return 0;
-        }
-        const char *arg1 = argv[optind + 1];
-        const char *path = (optind + 2 < argc) ? argv[optind + 2] : arg1;
-        config_set_dotfiles_dir(path);
-    } else if (strcmp(cmd, "config:add") == 0) {
-        if (optind + 1 >= argc) {
-            log_error("Usage: %s config:add <path>", argv[0]);
-            return 1;
-        }
-        const char *arg1 = argv[optind + 1];
-        const char *path = (optind + 2 < argc) ? argv[optind + 2] : arg1;
-        config_add_dotfiles_dir(path);
-    } else if (strcmp(cmd, "config:target") == 0) {
-        if (optind + 1 >= argc) {
-            log_error("Usage: %s config:target <path>", argv[0]);
-            return 1;
-        }
-        config_set_target_dir(argv[optind + 1]);
-    } else if (strcmp(cmd, "config:show") == 0 || strcmp(cmd, "config:list") == 0 || strcmp(cmd, "config:get") == 0) {
-        config_show();
+    if (strncmp(cmd, "config", 6) == 0) {
+        handle_config_command(argc, argv, optind);
+        return 0;
     } else if (strcmp(cmd, "deps:add") == 0) {
         if (optind + 2 >= argc) {
             log_error("Usage: %s deps:add <package> <dependency> [--required|--optional|--conflict]", argv[0]);
