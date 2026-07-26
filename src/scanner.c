@@ -48,19 +48,19 @@ static void process_single_file(const char *filepath, const StringArray *candida
         bool found;
     } ToolPattern;
 
-    ToolPattern *patterns = calloc(candidate_tools->count, sizeof(ToolPattern));
-    if (!patterns) {
-        fclose(fp);
-        return;
-    }
-
-    for (size_t t = 0; t < candidate_tools->count; t++) {
-        patterns[t].tool = candidate_tools->items[t];
-        patterns[t].found = str_array_contains(invocations, candidate_tools->items[t]);
-        snprintf(patterns[t].p1, sizeof(patterns[t].p1), "command -v %s", patterns[t].tool);
-        snprintf(patterns[t].p2, sizeof(patterns[t].p2), "exec %s", patterns[t].tool);
-        snprintf(patterns[t].p3, sizeof(patterns[t].p3), "%s init", patterns[t].tool);
-        snprintf(patterns[t].p4, sizeof(patterns[t].p4), "%s -c", patterns[t].tool);
+    ToolPattern *patterns = NULL;
+    if (candidate_tools && candidate_tools->count > 0) {
+        patterns = calloc(candidate_tools->count, sizeof(ToolPattern));
+        if (patterns) {
+            for (size_t t = 0; t < candidate_tools->count; t++) {
+                patterns[t].tool = candidate_tools->items[t];
+                patterns[t].found = str_array_contains(invocations, candidate_tools->items[t]);
+                snprintf(patterns[t].p1, sizeof(patterns[t].p1), "command -v %s", patterns[t].tool);
+                snprintf(patterns[t].p2, sizeof(patterns[t].p2), "exec %s", patterns[t].tool);
+                snprintf(patterns[t].p3, sizeof(patterns[t].p3), "%s init", patterns[t].tool);
+                snprintf(patterns[t].p4, sizeof(patterns[t].p4), "%s -c", patterns[t].tool);
+            }
+        }
     }
 
     while ((linelen = getline(&linebuf, &linecap, fp)) != -1) {
@@ -69,13 +69,15 @@ static void process_single_file(const char *filepath, const StringArray *candida
             parse_shebang_interpreter(linebuf, shebangs);
         }
 
-        for (size_t t = 0; t < candidate_tools->count; t++) {
-            if (!patterns[t].found) {
-                if (strstr(linebuf, patterns[t].p1) || strstr(linebuf, patterns[t].p2) ||
-                    strstr(linebuf, patterns[t].p3) || strstr(linebuf, patterns[t].p4)) {
-                    patterns[t].found = true;
-                    if (!str_array_contains(invocations, patterns[t].tool)) {
-                        str_array_append(invocations, patterns[t].tool);
+        if (patterns) {
+            for (size_t t = 0; t < candidate_tools->count; t++) {
+                if (!patterns[t].found) {
+                    if (strstr(linebuf, patterns[t].p1) || strstr(linebuf, patterns[t].p2) ||
+                        strstr(linebuf, patterns[t].p3) || strstr(linebuf, patterns[t].p4)) {
+                        patterns[t].found = true;
+                        if (!str_array_contains(invocations, patterns[t].tool)) {
+                            str_array_append(invocations, patterns[t].tool);
+                        }
                     }
                 }
             }
@@ -83,7 +85,7 @@ static void process_single_file(const char *filepath, const StringArray *candida
     }
 
     free(linebuf);
-    free(patterns);
+    if (patterns) free(patterns);
     fclose(fp);
 }
 
