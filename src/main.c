@@ -240,15 +240,22 @@ int main(int argc, char **argv) {
     } else if (strcmp(cmd, "check-symlinks") == 0 || strcmp(cmd, "check:symlinks") == 0) {
         check_symlink_health(dotfiles_dir, target_dir);
     } else if (strcmp(cmd, "diff") == 0) {
-        const char *pkg = (optind + 1 < argc) ? argv[optind + 1] : NULL;
-        if (pkg && strcmp(pkg, "all") != 0) {
-            stow_package(dotfiles_dir, target_dir, pkg, auto_install, true);
-        } else {
+        if (optind + 1 >= argc) {
             stow_all_packages(dotfiles_dir, target_dir, auto_install, true);
+        } else {
+            for (int i = optind + 1; i < argc; i++) {
+                if (strcmp(argv[i], "all") == 0) {
+                    stow_all_packages(dotfiles_dir, target_dir, auto_install, true);
+                } else {
+                    stow_package(dotfiles_dir, target_dir, argv[i], auto_install, true);
+                }
+            }
         }
     } else if (strcmp(cmd, "scan") == 0) {
         if (optind + 1 < argc) {
-            scan_package(dotfiles_dir, argv[optind + 1]);
+            for (int i = optind + 1; i < argc; i++) {
+                scan_package(dotfiles_dir, argv[i]);
+            }
         } else {
             StringArray pkgs;
             str_array_init(&pkgs);
@@ -265,19 +272,25 @@ int main(int argc, char **argv) {
             log_error("Please specify a package name to stow!");
             return 1;
         }
-        stow_package(dotfiles_dir, target_dir, argv[optind + 1], auto_install, dry_run);
+        for (int i = optind + 1; i < argc; i++) {
+            stow_package(dotfiles_dir, target_dir, argv[i], auto_install, dry_run);
+        }
     } else if (strcmp(cmd, "unstow") == 0) {
         if (optind + 1 >= argc) {
             log_error("Please specify a package name to unstow!");
             return 1;
         }
-        unstow_package(dotfiles_dir, target_dir, argv[optind + 1], dry_run);
+        for (int i = optind + 1; i < argc; i++) {
+            unstow_package(dotfiles_dir, target_dir, argv[i], dry_run);
+        }
     } else if (strcmp(cmd, "restow") == 0) {
         if (optind + 1 >= argc) {
             log_error("Please specify a package name to restow!");
             return 1;
         }
-        restow_package(dotfiles_dir, target_dir, argv[optind + 1], auto_install, dry_run);
+        for (int i = optind + 1; i < argc; i++) {
+            restow_package(dotfiles_dir, target_dir, argv[i], auto_install, dry_run);
+        }
     } else if (strcmp(cmd, "fix-conflicts") == 0) {
         unfold_directory_symlinks(target_dir, dotfiles_dir, dry_run);
     } else if (strcmp(cmd, "all") == 0) {
@@ -285,13 +298,18 @@ int main(int argc, char **argv) {
     } else if (strcmp(cmd, "help") == 0) {
         show_help(argv[0]);
     } else {
-        // Fallback: Check if target argument is a directory in dotfiles_dir
-        char pkg_dir[PATH_MAX * 2];
-        snprintf(pkg_dir, sizeof(pkg_dir), "%s/%s", dotfiles_dir, cmd);
-        if (is_dir(pkg_dir)) {
-            stow_package(dotfiles_dir, target_dir, cmd, auto_install, dry_run);
-        } else {
-            log_error("Unknown command or package '%s'", cmd);
+        bool any_stowed = false;
+        for (int i = optind; i < argc; i++) {
+            char pkg_dir[PATH_MAX * 2];
+            join_path(pkg_dir, sizeof(pkg_dir), dotfiles_dir, argv[i]);
+            if (is_dir(pkg_dir)) {
+                stow_package(dotfiles_dir, target_dir, argv[i], auto_install, dry_run);
+                any_stowed = true;
+            } else {
+                log_error("Unknown command or package '%s'", argv[i]);
+            }
+        }
+        if (!any_stowed) {
             show_help(argv[0]);
             return 1;
         }
