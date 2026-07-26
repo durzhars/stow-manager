@@ -8,7 +8,7 @@ DATADIR ?= $(DATAROOTDIR)
 SYSCONFDIR ?= $(PREFIX)/etc
 
 CC ?= gcc
-CFLAGS ?= -Wall -Wextra -pedantic -Wconversion -Wsign-conversion -std=c17 -O2 -Iinclude -DDATADIR=\"$(DATADIR)\" -DSYSCONFDIR=\"$(SYSCONFDIR)\"
+CFLAGS ?= -Wall -Wextra -pedantic -Wconversion -Wsign-conversion -Wno-overlength-strings -std=c17 -O2 -Iinclude -DDATADIR=\"$(DATADIR)\" -DSYSCONFDIR=\"$(SYSCONFDIR)\"
 LDFLAGS ?=
 
 SRC_DIR = src
