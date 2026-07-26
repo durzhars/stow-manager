@@ -55,6 +55,10 @@ static void test_path_normalization(void) {
     normalize_path(p3);
     ASSERT_STR_EQ(p3, "/");
 
+    char p4[1024] = "/home/user/.config/nvim/../../.dotfiles/nvim/init.vim";
+    collapse_path(p4);
+    ASSERT_STR_EQ(p4, "/home/user/.dotfiles/nvim/init.vim");
+
     char out[1024];
     join_path(out, sizeof(out), "/home/user/", "/.config/nvim");
     ASSERT_STR_EQ(out, "/home/user/.config/nvim");
@@ -102,10 +106,27 @@ static void test_package_discovery(void) {
     str_array_init(&pkgs);
     get_all_packages(tmp_dir, &pkgs);
 
-    ASSERT(str_array_contains(&pkgs, "bin"), "Package 'bin' should be discovered");
     ASSERT(str_array_contains(&pkgs, "scripts"), "Package 'scripts' should be discovered");
     ASSERT(str_array_contains(&pkgs, ".config"), "Package '.config' should be discovered");
-    ASSERT(!str_array_contains(&pkgs, "build"), "Directory 'build' should be ignored");
+    ASSERT(!str_array_contains(&pkgs, "build"), "Directory 'build' should be ignored when .stowignore is absent");
+    ASSERT(!str_array_contains(&pkgs, "bin"), "Directory 'bin' should be ignored when .stowignore is absent");
+
+    str_array_free(&pkgs);
+
+    // Now create .stowignore containing only 'build'
+    char ignore_path[1024];
+    snprintf(ignore_path, sizeof(ignore_path), "%s/.stowignore", tmp_dir);
+    FILE *fp = fopen(ignore_path, "w");
+    if (fp) {
+        fprintf(fp, "build\n");
+        fclose(fp);
+    }
+
+    str_array_init(&pkgs);
+    get_all_packages(tmp_dir, &pkgs);
+
+    ASSERT(str_array_contains(&pkgs, "bin"), "Package 'bin' should be discovered when .stowignore is present and bin is not ignored");
+    ASSERT(!str_array_contains(&pkgs, "build"), "Directory 'build' should be ignored via .stowignore");
 
     str_array_free(&pkgs);
 

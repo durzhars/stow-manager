@@ -99,6 +99,7 @@ char *read_symlink_target(const char *path) {
             normalize_path(abs_target);
             return strdup(abs_target);
         }
+        normalize_path(target);
         return strdup(target);
     }
     return NULL;
@@ -123,12 +124,65 @@ void get_distro_id(char *buf, size_t buf_size) {
     snprintf(buf, buf_size, "unknown");
 }
 
+void collapse_path(char *path) {
+    if (!path || strlen(path) == 0) return;
+
+    bool is_abs = (path[0] == '/');
+    char *stack[PATH_MAX / 2];
+    size_t top = 0;
+
+    char copy[PATH_MAX];
+    snprintf(copy, sizeof(copy), "%s", path);
+
+    char *saveptr = NULL;
+    char *token = strtok_r(copy, "/", &saveptr);
+    while (token) {
+        if (strcmp(token, ".") == 0 || strlen(token) == 0) {
+            // skip
+        } else if (strcmp(token, "..") == 0) {
+            if (top > 0 && strcmp(stack[top - 1], "..") != 0) {
+                top--;
+            } else if (!is_abs) {
+                stack[top++] = token;
+            }
+        } else {
+            stack[top++] = token;
+        }
+        token = strtok_r(NULL, "/", &saveptr);
+    }
+
+    char out[PATH_MAX] = {0};
+    size_t out_len = 0;
+
+    if (is_abs) {
+        out[0] = '/';
+        out[1] = '\0';
+        out_len = 1;
+    }
+
+    for (size_t i = 0; i < top; i++) {
+        if (out_len > 1 || (!is_abs && out_len > 0)) {
+            strncat(out, "/", sizeof(out) - out_len - 1);
+            out_len++;
+        }
+        strncat(out, stack[i], sizeof(out) - out_len - 1);
+        out_len = strlen(out);
+    }
+
+    if (out_len == 0) {
+        snprintf(out, sizeof(out), "%s", is_abs ? "/" : ".");
+    }
+
+    snprintf(path, PATH_MAX, "%s", out);
+}
+
 void normalize_path(char *path) {
     if (!path) return;
     size_t len = strlen(path);
     while (len > 1 && path[len - 1] == '/') {
         path[--len] = '\0';
     }
+    collapse_path(path);
 }
 
 void join_path(char *out, size_t out_size, const char *dir, const char *rel) {
@@ -314,7 +368,7 @@ void get_all_packages(const char *dotfiles_dir, StringArray *packages) {
     while ((entry = readdir(dir)) != NULL) {
         const char *name = entry->d_name;
         if (strcmp(name, ".") == 0 || strcmp(name, "..") == 0 || strcmp(name, ".git") == 0) continue;
-        if (strcmp(name, "build") == 0 && !file_exists(ignore_file)) continue;
+        if (!file_exists(ignore_file) && (strcmp(name, "build") == 0 || strcmp(name, "bin") == 0)) continue;
         if (str_array_contains(&ignored, name)) continue;
 
         char path[PATH_MAX * 2];
