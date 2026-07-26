@@ -30,6 +30,8 @@ void get_distro_id(char *buf, size_t buf_size);
 void normalize_path(char *path);
 void join_path(char *out, size_t out_size, const char *dir, const char *rel);
 int mkdir_p(const char *path, mode_t mode);
+bool is_path_prefix(const char *path, const char *prefix);
+void escape_shell_arg(const char *src, char *dest, size_t dest_size);
 
 typedef struct {
     char **items;

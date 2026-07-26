@@ -193,7 +193,7 @@ static void scan_unmanaged_cb(const char *symlink_path, void *user_data) {
     size_t dotfiles_len = strlen(ctx->dotfiles_dir);
 
     char *target = read_symlink_target(symlink_path);
-    if (target && strncmp(target, ctx->dotfiles_dir, dotfiles_len) == 0) {
+    if (target && is_path_prefix(target, ctx->dotfiles_dir)) {
         if (!file_exists(target)) {
             log_warn("Unmanaged / Orphan symlink: %s -> %s (target file does not exist)", symlink_path, target);
             ctx->unmanaged_count++;

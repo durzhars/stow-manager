@@ -166,6 +166,26 @@ int mkdir_p(const char *path, mode_t mode) {
     return 0;
 }
 
+bool is_path_prefix(const char *path, const char *prefix) {
+    if (!path || !prefix) return false;
+    size_t len = strlen(prefix);
+    if (strncmp(path, prefix, len) != 0) return false;
+    return (path[len] == '/' || path[len] == '\0' || (len > 0 && prefix[len - 1] == '/'));
+}
+
+void escape_shell_arg(const char *src, char *dest, size_t dest_size) {
+    if (!src || !dest || dest_size == 0) return;
+    size_t di = 0;
+    for (size_t si = 0; src[si] != '\0' && di + 2 < dest_size; si++) {
+        char c = src[si];
+        if (c == '"' || c == '$' || c == '`' || c == '\\' || c == '!') {
+            dest[di++] = '\\';
+        }
+        dest[di++] = c;
+    }
+    dest[di] = '\0';
+}
+
 void str_array_init(StringArray *arr) {
     arr->items = NULL;
     arr->count = 0;
