@@ -1,3 +1,21 @@
+/*
+ * Dotfiles Stow Manager (stow-manager)
+ * Copyright (C) 2026 durzhars
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program. If not, see <https://www.gnu.org/licenses/>.
+ */
+
 #define _GNU_SOURCE
 #define _DEFAULT_SOURCE
 #define _POSIX_C_SOURCE 200809L
@@ -7,68 +25,46 @@
 #include <errno.h>
 #include <signal.h>
 
-#define MAX_TEMP_PATHS 32
-static char g_temp_paths[MAX_TEMP_PATHS][PATH_MAX];
-static volatile sig_atomic_t g_temp_paths_count = 0;
+static StringArray g_temp_paths = {NULL, 0, 0};
 
 void register_temp_path(const char *path) {
-    if (!path || strlen(path) == 0) return;
-
-    int empty_slot = -1;
-    for (size_t i = 0; i < (size_t)g_temp_paths_count; i++) {
-        if (g_temp_paths[i][0] != '\0' && strcmp(g_temp_paths[i], path) == 0) {
-            return;
-        }
-        if (g_temp_paths[i][0] == '\0' && empty_slot == -1) {
-            empty_slot = (int)i;
-        }
-    }
-
-    if (empty_slot != -1) {
-        snprintf(g_temp_paths[empty_slot], PATH_MAX, "%s", path);
-    } else if ((size_t)g_temp_paths_count < MAX_TEMP_PATHS) {
-        snprintf(g_temp_paths[g_temp_paths_count], PATH_MAX, "%s", path);
-        g_temp_paths_count++;
+    if (!path) return;
+    if (!str_array_contains(&g_temp_paths, path)) {
+        str_array_append(&g_temp_paths, path);
     }
 }
 
 void unregister_temp_path(const char *path) {
     if (!path) return;
-    for (size_t i = 0; i < (size_t)g_temp_paths_count; i++) {
-        if (g_temp_paths[i][0] != '\0' && strcmp(g_temp_paths[i], path) == 0) {
-            g_temp_paths[i][0] = '\0';
-            break;
+    StringArray new_paths;
+    str_array_init(&new_paths);
+    for (size_t i = 0; i < g_temp_paths.count; i++) {
+        if (strcmp(g_temp_paths.items[i], path) != 0) {
+            str_array_append(&new_paths, g_temp_paths.items[i]);
         }
     }
+    str_array_free(&g_temp_paths);
+    g_temp_paths = new_paths;
 }
 
 void cleanup_temp_paths(void) {
-    for (size_t i = 0; i < (size_t)g_temp_paths_count; i++) {
-        if (g_temp_paths[i][0] == '\0') continue;
-        const char *p = g_temp_paths[i];
+    for (size_t i = 0; i < g_temp_paths.count; i++) {
+        const char *p = g_temp_paths.items[i];
         if (is_dir(p)) {
-            char rm_cmd[PATH_MAX * 2 + 32];
+            char rm_cmd[PATH_MAX * 4];
             snprintf(rm_cmd, sizeof(rm_cmd), "rm -rf \"%s\"", p);
             (void)system(rm_cmd);
         } else if (file_exists(p) || is_symlink(p)) {
             unlink(p);
         }
-        g_temp_paths[i][0] = '\0';
     }
-    g_temp_paths_count = 0;
+    str_array_free(&g_temp_paths);
 }
 
 static void handle_signal_interrupt(int sig) {
     (void)sig;
-    const char msg[] = "\nOperation interrupted by user (SIGINT / Ctrl+C). Cleaning up temporary files...\n";
-    (void)write(STDERR_FILENO, msg, sizeof(msg) - 1);
-
-    for (size_t i = 0; i < (size_t)g_temp_paths_count; i++) {
-        if (g_temp_paths[i][0] != '\0') {
-            unlink(g_temp_paths[i]);
-            rmdir(g_temp_paths[i]);
-        }
-    }
+    log_warn("\nOperation interrupted by user (SIGINT / Ctrl+C). Cleaning up temporary files...");
+    cleanup_temp_paths();
     _exit(128 + sig);
 }
 
@@ -344,15 +340,13 @@ void str_array_append(StringArray *arr, const char *str) {
         arr->items = new_items;
         arr->capacity = new_cap;
     }
-    char *dup = strdup(str);
-    if (!dup) return;
-    arr->items[arr->count++] = dup;
+    arr->items[arr->count++] = strdup(str);
 }
 
 bool str_array_contains(const StringArray *arr, const char *str) {
-    if (!arr || !str || !arr->items) return false;
+    if (!arr || !str) return false;
     for (size_t i = 0; i < arr->count; i++) {
-        if (arr->items[i] && strcmp(arr->items[i], str) == 0) return true;
+        if (strcmp(arr->items[i], str) == 0) return true;
     }
     return false;
 }
@@ -390,41 +384,22 @@ void get_all_packages(const char *dotfiles_dir, StringArray *packages) {
     DIR *dir = opendir(dotfiles_dir);
     if (!dir) return;
 
-    StringArray ignored;
-    str_array_init(&ignored);
-
-    char ignore_file[PATH_MAX * 2];
-    join_path(ignore_file, sizeof(ignore_file), dotfiles_dir, ".stowignore");
-    FILE *fp = fopen(ignore_file, "r");
-    if (fp) {
-        char *linebuf = NULL;
-        size_t linecap = 0;
-        ssize_t linelen;
-        while ((linelen = getline(&linebuf, &linecap, fp)) != -1) {
-            char *trimmed = trim_whitespace(linebuf);
-            if (trimmed[0] != '#' && trimmed[0] != '\0') {
-                str_array_append(&ignored, trimmed);
-            }
-        }
-        free(linebuf);
-        fclose(fp);
-    }
-
     struct dirent *entry;
     while ((entry = readdir(dir)) != NULL) {
         const char *name = entry->d_name;
-        if (strcmp(name, ".") == 0 || strcmp(name, "..") == 0 || strcmp(name, ".git") == 0) continue;
-        if (!file_exists(ignore_file) && (strcmp(name, "build") == 0 || strcmp(name, "bin") == 0)) continue;
-        if (str_array_contains(&ignored, name)) continue;
-
-        char path[PATH_MAX * 2];
-        join_path(path, sizeof(path), dotfiles_dir, name);
-        if (is_dir(path)) {
-            str_array_append(packages, name);
+        if (strcmp(name, ".") != 0 && strcmp(name, "..") != 0 &&
+            strcmp(name, ".git") != 0 && strcmp(name, "scratch") != 0 &&
+            strcmp(name, "scripts") != 0 && strcmp(name, "src") != 0 &&
+            strcmp(name, "include") != 0 && strcmp(name, "build") != 0 &&
+            strcmp(name, "bin") != 0 && strcmp(name, "tests") != 0) {
+            char path[PATH_MAX * 2];
+            snprintf(path, sizeof(path), "%s/%s", dotfiles_dir, name);
+            if (is_dir(path)) {
+                str_array_append(packages, name);
+            }
         }
     }
     closedir(dir);
-    str_array_free(&ignored);
 }
 
 void walk_dir_symlinks(const char *dir_path, int current_depth, int max_depth, WalkSymlinkCallback cb, void *user_data) {
