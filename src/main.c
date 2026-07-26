@@ -23,37 +23,69 @@
 #include "scanner.h"
 #include "config.h"
 
-static void show_help(const char *prog_name) {
-    printf("%sDotfiles Stow Manager (stow-manager)%s\n", COLOR_BOLD, COLOR_RESET);
-    printf("Usage: %s [options] <command> [arguments]\n\n", prog_name);
-    printf("Options:\n");
-    printf("  %s-d, --dotfiles-dir%s <path>        Set dotfiles repository directory for current command\n", COLOR_CYAN, COLOR_RESET);
-    printf("  %s-t, --target-dir%s <path>          Set target home directory for current command\n", COLOR_CYAN, COLOR_RESET);
-    printf("  %s-y, --install%s                  Auto-confirm installation of missing dependencies/plugins\n", COLOR_CYAN, COLOR_RESET);
-    printf("  %s-n, --dry-run%s                  Dry-run mode (preview changes without modifying disk)\n", COLOR_CYAN, COLOR_RESET);
-    printf("  %s-h, --help%s                     Show this help menu\n\n", COLOR_CYAN, COLOR_RESET);
-    printf("Configuration Commands:\n");
-    printf("  %sconfig show%s                      Display current configuration settings & paths\n", COLOR_CYAN, COLOR_RESET);
-    printf("  %sconfig set%s [dotfiles|target] <path> Set primary dotfiles/target directory in config file\n", COLOR_CYAN, COLOR_RESET);
-    printf("  %sconfig add%s <path>                Add an additional dotfiles repository directory\n", COLOR_CYAN, COLOR_RESET);
-    printf("  %sconfig remove%s <path>             Remove a dotfiles repository directory from config\n\n", COLOR_CYAN, COLOR_RESET);
-    printf("Dependency Management Commands:\n");
-    printf("  %sdeps:add%s <pkg> <dep> [--opt]   Add a dependency/conflict to package manifest\n", COLOR_CYAN, COLOR_RESET);
-    printf("  %sdeps:remove%s <pkg> <dep>        Remove a dependency from package manifest\n", COLOR_CYAN, COLOR_RESET);
-    printf("  %sdeps:show%s <pkg>               Display package manifest contents\n", COLOR_CYAN, COLOR_RESET);
-    printf("  %smake:package%s <name>            Scaffold a new Stow package directory & manifest\n\n", COLOR_CYAN, COLOR_RESET);
-    printf("Package & Stow Operations:\n");
-    printf("  %scheck%s [pkg]                    Detect missing dependencies, plugins & broken symlinks\n", COLOR_CYAN, COLOR_RESET);
-    printf("  %scheck-symlinks%s                 Scan for broken repo symlinks & unmanaged target symlinks\n", COLOR_CYAN, COLOR_RESET);
-    printf("  %sdiff%s [pkg]                     Preview symlink creations, conflict backups, and missing deps\n", COLOR_CYAN, COLOR_RESET);
-    printf("  %sscan%s [pkg]                     Recursively scan package files to auto-detect dependencies\n", COLOR_CYAN, COLOR_RESET);
-    printf("  %slist%s                           List all packages and stowed status\n", COLOR_CYAN, COLOR_RESET);
-    printf("  %sstow%s <pkg>                     Stow a package with auto conflict resolution\n", COLOR_CYAN, COLOR_RESET);
-    printf("  %sunstow%s <pkg>                   Unstow a package\n", COLOR_CYAN, COLOR_RESET);
-    printf("  %srestow%s <pkg>                   Restow a package\n", COLOR_CYAN, COLOR_RESET);
-    printf("  %sfix-conflicts%s                  Unfold directory symlinks & resolve conflicts\n", COLOR_CYAN, COLOR_RESET);
-    printf("  %sall%s                            Stow all packages\n", COLOR_CYAN, COLOR_RESET);
-    printf("  %shelp%s                           Show this help menu\n", COLOR_CYAN, COLOR_RESET);
+static const char *EMBEDDED_HELP =
+"Dotfiles Stow Manager (stow-manager)\n"
+"Usage: stow-manager [options] <command> [arguments]\n\n"
+"Options:\n"
+"  -d, --dotfiles-dir <path>        Set dotfiles repository directory for current command\n"
+"  -t, --target-dir <path>          Set target home directory for current command\n"
+"  -y, --install                  Auto-confirm installation of missing dependencies/plugins\n"
+"  -n, --dry-run                  Dry-run mode (preview changes without modifying disk)\n"
+"  -h, --help                     Show this help menu\n\n"
+"Configuration Commands:\n"
+"  config show                      Display current configuration settings & paths\n"
+"  config set [dotfiles|target] <path> Set primary dotfiles/target directory in config file\n"
+"  config add <path>                Add an additional dotfiles repository directory\n"
+"  config remove <path>             Remove a dotfiles repository directory from config\n\n"
+"Dependency Management Commands:\n"
+"  deps:add <pkg> <dep> [--opt]   Add a dependency/conflict to package manifest\n"
+"  deps:remove <pkg> <dep>        Remove a dependency from package manifest\n"
+"  deps:show <pkg>               Display package manifest contents\n"
+"  make:package <name>            Scaffold a new Stow package directory & manifest\n\n"
+"Package & Stow Operations:\n"
+"  check [pkg]                    Detect missing dependencies, plugins & broken symlinks\n"
+"  check-symlinks                 Scan for broken repo symlinks & unmanaged target symlinks\n"
+"  diff [pkg]                     Preview symlink creations, conflict backups, and missing deps\n"
+"  scan [pkg]                     Recursively scan package files to auto-detect dependencies\n"
+"  list                           List all packages and stowed status\n"
+"  stow <pkg>                     Stow a package with auto conflict resolution\n"
+"  unstow <pkg>                   Unstow a package\n"
+"  restow <pkg>                   Restow a package\n"
+"  fix-conflicts                  Unfold directory symlinks & resolve conflicts\n"
+"  all                            Stow all packages\n"
+"  help                           Show this help menu\n";
+
+static void show_help(void) {
+    char help_paths[4][PATH_MAX * 2];
+    size_t num_paths = 0;
+
+    const char *home = getenv("HOME");
+    if (home) {
+        snprintf(help_paths[num_paths++], sizeof(help_paths[0]), "%s/.local/share/stow-manager/help.txt", home);
+        snprintf(help_paths[num_paths++], sizeof(help_paths[0]), "%s/.config/stow-manager/help.txt", home);
+    }
+#ifdef DATADIR
+    snprintf(help_paths[num_paths++], sizeof(help_paths[0]), "%s/stow-manager/help.txt", DATADIR);
+#endif
+    snprintf(help_paths[num_paths++], sizeof(help_paths[0]), "resources/help.txt");
+
+    FILE *fp = NULL;
+    for (size_t i = 0; i < num_paths; i++) {
+        if (file_exists(help_paths[i])) {
+            fp = fopen(help_paths[i], "r");
+            if (fp) break;
+        }
+    }
+
+    if (fp) {
+        char line[512];
+        while (fgets(line, sizeof(line), fp)) {
+            fputs(line, stdout);
+        }
+        fclose(fp);
+    } else {
+        fputs(EMBEDDED_HELP, stdout);
+    }
 }
 
 static void handle_config_command(int argc, char **argv, int optind) {
@@ -230,7 +262,7 @@ int main(int argc, char **argv) {
                 dry_run = true;
                 break;
             case 'h':
-                show_help(argv[0]);
+                show_help();
                 return 0;
             default:
                 break;
@@ -238,7 +270,7 @@ int main(int argc, char **argv) {
     }
 
     if (optind >= argc) {
-        show_help(argv[0]);
+        show_help();
         return 0;
     }
 
@@ -337,7 +369,7 @@ int main(int argc, char **argv) {
     } else if (strcmp(cmd, "all") == 0) {
         stow_all_packages(dotfiles_dir, target_dir, auto_install, dry_run);
     } else if (strcmp(cmd, "help") == 0) {
-        show_help(argv[0]);
+        show_help();
     } else {
         char pkg_dir[PATH_MAX * 2];
         join_path(pkg_dir, sizeof(pkg_dir), dotfiles_dir, cmd);
@@ -345,7 +377,7 @@ int main(int argc, char **argv) {
             stow_package(dotfiles_dir, target_dir, cmd, auto_install, dry_run);
         } else {
             log_error("Unknown command or package '%s'", cmd);
-            show_help(argv[0]);
+            show_help();
             return 1;
         }
     }

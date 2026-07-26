@@ -1,7 +1,8 @@
 # Makefile for Dotfiles Stow Manager (ISO C17)
 
+PREFIX ?= /usr/local
 CC ?= gcc
-CFLAGS ?= -Wall -Wextra -pedantic -Wconversion -Wsign-conversion -std=c17 -O2 -Iinclude
+CFLAGS ?= -Wall -Wextra -pedantic -Wconversion -Wsign-conversion -std=c17 -O2 -Iinclude -DDATADIR=\"$(PREFIX)/share\"
 LDFLAGS ?=
 
 SRC_DIR = src
@@ -62,3 +63,5 @@ clean:
 install: $(TARGET)
 	install -d $(DESTDIR)$(PREFIX)/bin
 	install -m 755 $(TARGET) $(DESTDIR)$(PREFIX)/bin/stow-manager
+	install -d $(DESTDIR)$(PREFIX)/share/stow-manager
+	install -m 644 resources/help.txt $(DESTDIR)$(PREFIX)/share/stow-manager/help.txt
