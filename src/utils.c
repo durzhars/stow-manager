@@ -9,14 +9,24 @@
 
 #define MAX_TEMP_PATHS 32
 static char g_temp_paths[MAX_TEMP_PATHS][PATH_MAX];
-static size_t g_temp_paths_count = 0;
+static volatile sig_atomic_t g_temp_paths_count = 0;
 
 void register_temp_path(const char *path) {
     if (!path || strlen(path) == 0) return;
-    for (size_t i = 0; i < g_temp_paths_count; i++) {
-        if (strcmp(g_temp_paths[i], path) == 0) return;
+
+    int empty_slot = -1;
+    for (size_t i = 0; i < (size_t)g_temp_paths_count; i++) {
+        if (g_temp_paths[i][0] != '\0' && strcmp(g_temp_paths[i], path) == 0) {
+            return;
+        }
+        if (g_temp_paths[i][0] == '\0' && empty_slot == -1) {
+            empty_slot = (int)i;
+        }
     }
-    if (g_temp_paths_count < MAX_TEMP_PATHS) {
+
+    if (empty_slot != -1) {
+        snprintf(g_temp_paths[empty_slot], PATH_MAX, "%s", path);
+    } else if ((size_t)g_temp_paths_count < MAX_TEMP_PATHS) {
         snprintf(g_temp_paths[g_temp_paths_count], PATH_MAX, "%s", path);
         g_temp_paths_count++;
     }
@@ -24,19 +34,17 @@ void register_temp_path(const char *path) {
 
 void unregister_temp_path(const char *path) {
     if (!path) return;
-    for (size_t i = 0; i < g_temp_paths_count; i++) {
-        if (strcmp(g_temp_paths[i], path) == 0) {
-            for (size_t j = i; j + 1 < g_temp_paths_count; j++) {
-                strcpy(g_temp_paths[j], g_temp_paths[j + 1]);
-            }
-            g_temp_paths_count--;
+    for (size_t i = 0; i < (size_t)g_temp_paths_count; i++) {
+        if (g_temp_paths[i][0] != '\0' && strcmp(g_temp_paths[i], path) == 0) {
+            g_temp_paths[i][0] = '\0';
             break;
         }
     }
 }
 
 void cleanup_temp_paths(void) {
-    for (size_t i = 0; i < g_temp_paths_count; i++) {
+    for (size_t i = 0; i < (size_t)g_temp_paths_count; i++) {
+        if (g_temp_paths[i][0] == '\0') continue;
         const char *p = g_temp_paths[i];
         if (is_dir(p)) {
             char rm_cmd[PATH_MAX * 2 + 32];
@@ -45,6 +53,7 @@ void cleanup_temp_paths(void) {
         } else if (file_exists(p) || is_symlink(p)) {
             unlink(p);
         }
+        g_temp_paths[i][0] = '\0';
     }
     g_temp_paths_count = 0;
 }
@@ -54,9 +63,11 @@ static void handle_signal_interrupt(int sig) {
     const char msg[] = "\nOperation interrupted by user (SIGINT / Ctrl+C). Cleaning up temporary files...\n";
     (void)write(STDERR_FILENO, msg, sizeof(msg) - 1);
 
-    for (size_t i = 0; i < g_temp_paths_count; i++) {
-        unlink(g_temp_paths[i]);
-        rmdir(g_temp_paths[i]);
+    for (size_t i = 0; i < (size_t)g_temp_paths_count; i++) {
+        if (g_temp_paths[i][0] != '\0') {
+            unlink(g_temp_paths[i]);
+            rmdir(g_temp_paths[i]);
+        }
     }
     _exit(128 + sig);
 }
