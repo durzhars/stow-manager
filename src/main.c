@@ -23,7 +23,14 @@
 #include "scanner.h"
 #include "config.h"
 
+#if __has_include("help_text.h")
 #include "help_text.h"
+#else
+static const char *EMBEDDED_HELP =
+"# Dotfiles Stow Manager (`stow-manager`)\n\n"
+"Usage: `stow-manager [options] <command> [arguments]`\n\n"
+"Run `make` to compile full help menu or pass `-h` / `--help`.\n";
+#endif
 
 static void render_markdown_line(char *line, bool is_tty) {
     size_t len = strlen(line);
