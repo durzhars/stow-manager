@@ -157,17 +157,24 @@ static void test_symlink_health_check(void) {
 }
 
 static void test_config_system(void) {
+    char tmp_dir[] = "/tmp/stow_cfg_test_XXXXXX";
+    ASSERT(mkdtemp(tmp_dir) != NULL, "Should create temporary test directory");
+
     Config cfg;
     config_init(&cfg);
-    str_array_append(&cfg.dotfiles_dirs, "/home/user/dotfiles");
+    str_array_append(&cfg.dotfiles_dirs, tmp_dir);
     config_save(&cfg);
     config_free(&cfg);
 
     Config loaded;
     config_init(&loaded);
     ASSERT(config_load(&loaded), "Should load config file");
-    ASSERT(str_array_contains(&loaded.dotfiles_dirs, "/home/user/dotfiles"), "Config should contain saved dotfiles_dir");
+    ASSERT(str_array_contains(&loaded.dotfiles_dirs, tmp_dir), "Config should contain saved dotfiles_dir");
     config_free(&loaded);
+
+    char cleanup_cmd[PATH_MAX * 4];
+    snprintf(cleanup_cmd, sizeof(cleanup_cmd), "rm -rf \"%s\"", tmp_dir);
+    (void)system(cleanup_cmd);
 }
 
 int main(void) {

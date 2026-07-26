@@ -58,7 +58,7 @@ bool config_load(Config *cfg) {
                 char *token = strtok_r(val, ":", &saveptr);
                 while (token) {
                     char *p = trim_whitespace(token);
-                    if (strlen(p) > 0 && !str_array_contains(&cfg->dotfiles_dirs, p)) {
+                    if (strlen(p) > 0 && is_dir(p) && !str_array_contains(&cfg->dotfiles_dirs, p)) {
                         str_array_append(&cfg->dotfiles_dirs, p);
                     }
                     token = strtok_r(NULL, ":", &saveptr);
@@ -105,9 +105,19 @@ bool config_save(const Config *cfg) {
 }
 
 void config_set_dotfiles_dir(const char *path) {
+    if (!path || strlen(path) == 0) {
+        log_error("Usage: config set dotfiles <path>");
+        return;
+    }
+
     char abs_path[PATH_MAX * 2];
     expand_tilde_path(path, abs_path, sizeof(abs_path));
     normalize_path(abs_path);
+
+    if (!is_dir(abs_path)) {
+        log_error("Directory '%s' does not exist or is not a directory!", abs_path);
+        return;
+    }
 
     Config cfg;
     config_init(&cfg);
@@ -132,9 +142,19 @@ void config_set_dotfiles_dir(const char *path) {
 }
 
 void config_add_dotfiles_dir(const char *path) {
+    if (!path || strlen(path) == 0) {
+        log_error("Usage: config add <path>");
+        return;
+    }
+
     char abs_path[PATH_MAX * 2];
     expand_tilde_path(path, abs_path, sizeof(abs_path));
     normalize_path(abs_path);
+
+    if (!is_dir(abs_path)) {
+        log_error("Directory '%s' does not exist or is not a directory!", abs_path);
+        return;
+    }
 
     Config cfg;
     config_init(&cfg);
@@ -151,10 +171,59 @@ void config_add_dotfiles_dir(const char *path) {
     config_free(&cfg);
 }
 
-void config_set_target_dir(const char *path) {
+void config_remove_dotfiles_dir(const char *path) {
+    if (!path || strlen(path) == 0) {
+        log_error("Usage: config remove <path>");
+        return;
+    }
+
     char abs_path[PATH_MAX * 2];
     expand_tilde_path(path, abs_path, sizeof(abs_path));
     normalize_path(abs_path);
+
+    Config cfg;
+    config_init(&cfg);
+    config_load(&cfg);
+
+    StringArray new_dirs;
+    str_array_init(&new_dirs);
+    bool removed = false;
+
+    for (size_t i = 0; i < cfg.dotfiles_dirs.count; i++) {
+        if (strcmp(cfg.dotfiles_dirs.items[i], abs_path) == 0 || strcmp(cfg.dotfiles_dirs.items[i], path) == 0) {
+            removed = true;
+        } else {
+            str_array_append(&new_dirs, cfg.dotfiles_dirs.items[i]);
+        }
+    }
+
+    str_array_free(&cfg.dotfiles_dirs);
+    cfg.dotfiles_dirs = new_dirs;
+
+    if (removed) {
+        config_save(&cfg);
+        log_success("Removed dotfiles directory: %s", abs_path);
+    } else {
+        log_warn("Directory '%s' was not found in configuration.", path);
+    }
+
+    config_free(&cfg);
+}
+
+void config_set_target_dir(const char *path) {
+    if (!path || strlen(path) == 0) {
+        log_error("Usage: config set target <path>");
+        return;
+    }
+
+    char abs_path[PATH_MAX * 2];
+    expand_tilde_path(path, abs_path, sizeof(abs_path));
+    normalize_path(abs_path);
+
+    if (!is_dir(abs_path)) {
+        log_error("Target directory '%s' does not exist or is not a directory!", abs_path);
+        return;
+    }
 
     Config cfg;
     config_init(&cfg);

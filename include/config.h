@@ -18,6 +18,7 @@ bool config_save(const Config *cfg);
 
 void config_set_dotfiles_dir(const char *path);
 void config_add_dotfiles_dir(const char *path);
+void config_remove_dotfiles_dir(const char *path);
 void config_set_target_dir(const char *path);
 void config_show(void);
 
