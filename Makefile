@@ -64,4 +64,4 @@ install: $(TARGET)
 	install -d $(DESTDIR)$(PREFIX)/bin
 	install -m 755 $(TARGET) $(DESTDIR)$(PREFIX)/bin/stow-manager
 	install -d $(DESTDIR)$(PREFIX)/share/stow-manager
-	install -m 644 resources/help.txt $(DESTDIR)$(PREFIX)/share/stow-manager/help.txt
+	install -m 644 resources/help.md $(DESTDIR)$(PREFIX)/share/stow-manager/help.md

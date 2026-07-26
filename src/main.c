@@ -24,36 +24,87 @@
 #include "config.h"
 
 static const char *EMBEDDED_HELP =
-"Dotfiles Stow Manager (stow-manager)\n"
-"Usage: stow-manager [options] <command> [arguments]\n\n"
-"Options:\n"
-"  -d, --dotfiles-dir <path>        Set dotfiles repository directory for current command\n"
-"  -t, --target-dir <path>          Set target home directory for current command\n"
-"  -y, --install                  Auto-confirm installation of missing dependencies/plugins\n"
-"  -n, --dry-run                  Dry-run mode (preview changes without modifying disk)\n"
-"  -h, --help                     Show this help menu\n\n"
-"Configuration Commands:\n"
-"  config show                      Display current configuration settings & paths\n"
-"  config set [dotfiles|target] <path> Set primary dotfiles/target directory in config file\n"
-"  config add <path>                Add an additional dotfiles repository directory\n"
-"  config remove <path>             Remove a dotfiles repository directory from config\n\n"
-"Dependency Management Commands:\n"
-"  deps:add <pkg> <dep> [--opt]   Add a dependency/conflict to package manifest\n"
-"  deps:remove <pkg> <dep>        Remove a dependency from package manifest\n"
-"  deps:show <pkg>               Display package manifest contents\n"
-"  make:package <name>            Scaffold a new Stow package directory & manifest\n\n"
-"Package & Stow Operations:\n"
-"  check [pkg]                    Detect missing dependencies, plugins & broken symlinks\n"
-"  check-symlinks                 Scan for broken repo symlinks & unmanaged target symlinks\n"
-"  diff [pkg]                     Preview symlink creations, conflict backups, and missing deps\n"
-"  scan [pkg]                     Recursively scan package files to auto-detect dependencies\n"
-"  list                           List all packages and stowed status\n"
-"  stow <pkg>                     Stow a package with auto conflict resolution\n"
-"  unstow <pkg>                   Unstow a package\n"
-"  restow <pkg>                   Restow a package\n"
-"  fix-conflicts                  Unfold directory symlinks & resolve conflicts\n"
-"  all                            Stow all packages\n"
-"  help                           Show this help menu\n";
+"# Dotfiles Stow Manager (`stow-manager`)\n\n"
+"**Usage**: `stow-manager [options] <command> [arguments]`\n\n"
+"## Options\n\n"
+"- **`-d, --dotfiles-dir`** `<path>` : Set dotfiles repository directory for current command\n"
+"- **`-t, --target-dir`** `<path>`   : Set target home directory for current command\n"
+"- **`-y, --install`**             : Auto-confirm installation of missing dependencies/plugins\n"
+"- **`-n, --dry-run`**             : Dry-run mode (preview changes without modifying disk)\n"
+"- **`-h, --help`**                : Show this help menu\n\n"
+"## Configuration Commands\n\n"
+"- **`config show`**                        : Display current configuration settings & paths\n"
+"- **`config set [dotfiles|target]`** `<path>` : Set primary dotfiles/target directory in config file\n"
+"- **`config add`** `<path>`                  : Add an additional dotfiles repository directory\n"
+"- **`config remove`** `<path>`               : Remove a dotfiles repository directory from config\n\n"
+"## Dependency Management Commands\n\n"
+"- **`deps:add`** `<pkg> <dep> [--opt]`   : Add a dependency/conflict to package manifest\n"
+"- **`deps:remove`** `<pkg> <dep>`        : Remove a dependency from package manifest\n"
+"- **`deps:show`** `<pkg>`               : Display package manifest contents\n"
+"- **`make:package`** `<name>`            : Scaffold a new Stow package directory & manifest\n\n"
+"## Package & Stow Operations\n\n"
+"- **`check`** `[pkg]`                    : Detect missing dependencies, plugins & broken symlinks\n"
+"- **`check-symlinks`**                 : Scan for broken repo symlinks & unmanaged target symlinks\n"
+"- **`diff`** `[pkg]`                     : Preview symlink creations, conflict backups, and missing deps\n"
+"- **`scan`** `[pkg]`                     : Recursively scan package files to auto-detect dependencies\n"
+"- **`list`**                           : List all packages and stowed status\n"
+"- **`stow`** `<pkg>`                     : Stow a package with auto conflict resolution\n"
+"- **`unstow`** `<pkg>`                   : Unstow a package\n"
+"- **`restow`** `<pkg>`                   : Restow a package\n"
+"- **`fix-conflicts`**                  : Unfold directory symlinks & resolve conflicts\n"
+"- **`all`**                            : Stow all packages\n"
+"- **`help`**                           : Show this help menu\n";
+
+static void render_markdown_line(char *line, bool is_tty) {
+    size_t len = strlen(line);
+    if (len > 0 && line[len - 1] == '\n') {
+        line[len - 1] = '\0';
+    }
+
+    if (!is_tty) {
+        printf("%s\n", line);
+        return;
+    }
+
+    if (strncmp(line, "# ", 2) == 0) {
+        printf("\n%s%s%s%s\n", COLOR_CYAN, COLOR_BOLD, line + 2, COLOR_RESET);
+    } else if (strncmp(line, "## ", 3) == 0) {
+        printf("\n%s%s=== %s ===%s\n", COLOR_CYAN, COLOR_BOLD, line + 3, COLOR_RESET);
+    } else {
+        char *p = line;
+        bool in_bold = false;
+        bool in_code = false;
+
+        while (*p) {
+            if (strncmp(p, "**", 2) == 0) {
+                if (in_bold) {
+                    printf("%s", COLOR_RESET);
+                    in_bold = false;
+                } else {
+                    printf("%s%s", COLOR_BOLD, COLOR_CYAN);
+                    in_bold = true;
+                }
+                p += 2;
+            } else if (*p == '`') {
+                if (in_code) {
+                    printf("%s", COLOR_RESET);
+                    in_code = false;
+                } else {
+                    printf("%s", COLOR_CYAN);
+                    in_code = true;
+                }
+                p++;
+            } else {
+                putchar(*p);
+                p++;
+            }
+        }
+        if (in_bold || in_code) {
+            printf("%s", COLOR_RESET);
+        }
+        printf("\n");
+    }
+}
 
 static void show_help(void) {
     char help_paths[4][PATH_MAX * 2];
@@ -61,13 +112,13 @@ static void show_help(void) {
 
     const char *home = getenv("HOME");
     if (home) {
-        snprintf(help_paths[num_paths++], sizeof(help_paths[0]), "%s/.local/share/stow-manager/help.txt", home);
-        snprintf(help_paths[num_paths++], sizeof(help_paths[0]), "%s/.config/stow-manager/help.txt", home);
+        snprintf(help_paths[num_paths++], sizeof(help_paths[0]), "%s/.local/share/stow-manager/help.md", home);
+        snprintf(help_paths[num_paths++], sizeof(help_paths[0]), "%s/.config/stow-manager/help.md", home);
     }
 #ifdef DATADIR
-    snprintf(help_paths[num_paths++], sizeof(help_paths[0]), "%s/stow-manager/help.txt", DATADIR);
+    snprintf(help_paths[num_paths++], sizeof(help_paths[0]), "%s/stow-manager/help.md", DATADIR);
 #endif
-    snprintf(help_paths[num_paths++], sizeof(help_paths[0]), "resources/help.txt");
+    snprintf(help_paths[num_paths++], sizeof(help_paths[0]), "resources/help.md");
 
     FILE *fp = NULL;
     for (size_t i = 0; i < num_paths; i++) {
@@ -77,14 +128,25 @@ static void show_help(void) {
         }
     }
 
+    bool is_tty = isatty(STDOUT_FILENO) != 0;
+
     if (fp) {
-        char line[512];
+        char line[1024];
         while (fgets(line, sizeof(line), fp)) {
-            fputs(line, stdout);
+            render_markdown_line(line, is_tty);
         }
         fclose(fp);
     } else {
-        fputs(EMBEDDED_HELP, stdout);
+        char *copy = strdup(EMBEDDED_HELP);
+        if (copy) {
+            char *saveptr = NULL;
+            char *token = strtok_r(copy, "\n", &saveptr);
+            while (token) {
+                render_markdown_line(token, is_tty);
+                token = strtok_r(NULL, "\n", &saveptr);
+            }
+            free(copy);
+        }
     }
 }
 
