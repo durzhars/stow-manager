@@ -23,119 +23,95 @@
 #include "scanner.h"
 #include "config.h"
 
-#if __has_include("help_text.h") && __has_include("help_text_plain.h")
-#include "help_text.h"
+#if __has_include("help_text_plain.h")
 #include "help_text_plain.h"
 #else
-static const char *EMBEDDED_HELP_MD =
-"# Dotfiles Stow Manager (`stow-manager`)\n\n"
-"Usage: `stow-manager [options] <command> [arguments]`\n\n"
-"Run `make` to compile full help menu or pass `-h` / `--help`.\n";
-
 static const char *EMBEDDED_HELP_TXT =
 "Dotfiles Stow Manager (stow-manager)\n\n"
 "Usage: stow-manager [options] <command> [arguments]\n\n"
 "Run make to compile full help menu or pass -h / --help.\n";
 #endif
 
-static void render_inline_markdown(const char *text, bool is_tty) {
-    if (!text) return;
-    const char *p = text;
-    bool in_bold = false;
-    bool in_code = false;
+static void render_plain_line(const char *line, bool use_color) {
+    size_t len = strlen(line);
 
-    while (*p) {
-        if (strncmp(p, "**", 2) == 0) {
-            if (is_tty) {
-                if (in_bold) {
-                    printf("%s", COLOR_RESET);
-                    in_bold = false;
-                } else {
-                    printf("%s%s", COLOR_BOLD, COLOR_WHITE);
-                    in_bold = true;
-                }
-            }
-            p += 2;
-        } else if (*p == '*' && *(p + 1) != '*') {
-            if (is_tty) {
-                if (in_bold) {
-                    printf("%s", COLOR_RESET);
-                    in_bold = false;
-                } else {
-                    printf("%s%s", COLOR_BOLD, COLOR_WHITE);
-                    in_bold = true;
-                }
-            }
-            p++;
-        } else if (*p == '`') {
-            if (is_tty) {
-                if (in_code) {
-                    printf("%s", COLOR_RESET);
-                    in_code = false;
-                } else {
-                    printf("%s", COLOR_CYAN);
-                    in_code = true;
-                }
-            }
-            p++;
-        } else {
-            putchar(*p);
-            p++;
+    /* Strip trailing newline for consistent output */
+    char buf[1024];
+    if (len >= sizeof(buf)) len = sizeof(buf) - 1;
+    memcpy(buf, line, len);
+    buf[len] = '\0';
+    if (len > 0 && buf[len - 1] == '\n') {
+        buf[len - 1] = '\0';
+    }
+
+    if (!use_color) {
+        printf("%s\n", buf);
+        return;
+    }
+
+    /* Title line (first non-empty line, no leading whitespace, contains program name) */
+    if (strstr(buf, "stow-manager") && buf[0] != ' ') {
+        if (strncmp(buf, "Usage:", 6) == 0) {
+            /* "Usage: ..." line */
+            printf("%s%sUsage:%s %s\n", COLOR_BOLD, COLOR_WHITE, COLOR_RESET, buf + 6);
+            return;
+        }
+        if (strncmp(buf, "Dotfiles", 8) == 0) {
+            printf("\n%s%s%s%s\n", COLOR_BOLD, COLOR_CYAN, buf, COLOR_RESET);
+            return;
         }
     }
-    if (is_tty && (in_bold || in_code)) {
-        printf("%s", COLOR_RESET);
-    }
-}
 
-static void render_markdown_line(char *line, bool is_tty) {
-    size_t len = strlen(line);
-    if (len > 0 && line[len - 1] == '\n') {
-        line[len - 1] = '\0';
+    /* Section headers: lines ending with ':' where leading words are ALL-CAPS */
+    /* e.g. "GLOBAL OPTIONS:", "CONFIGURATION COMMANDS (config:*):" */
+    if (buf[0] != ' ' && buf[0] != '\0' && len > 1) {
+        size_t blen = strlen(buf);
+        if (blen > 0 && buf[blen - 1] == ':') {
+            /* Check that text before first '(' is uppercase */
+            const char *p = buf;
+            bool is_header = true;
+            while (*p && *p != '(') {
+                if (*p >= 'a' && *p <= 'z') { is_header = false; break; }
+                p++;
+            }
+            if (is_header) {
+                /* Strip trailing ':' for cleaner display */
+                char header[1024];
+                memcpy(header, buf, blen - 1);
+                header[blen - 1] = '\0';
+                printf("\n%s%s=== %s ===%s\n", COLOR_BOLD, COLOR_CYAN, header, COLOR_RESET);
+                return;
+            }
+        }
     }
 
-    if (!is_tty) {
-        render_inline_markdown(line, false);
-        printf("\n");
+    /* Indented command/option lines: "  command  Description" */
+    if (buf[0] == ' ' && buf[1] == ' ' && buf[2] != ' ' && buf[2] != '\0') {
+        printf("  %s•%s %s\n", COLOR_CYAN, COLOR_RESET, buf + 2);
         return;
     }
 
-    if (strncmp(line, "# ", 2) == 0) {
-        printf("\n%s%s", COLOR_CYAN, COLOR_BOLD);
-        render_inline_markdown(line + 2, true);
-        printf("%s\n", COLOR_RESET);
+    /* Sub-section label: "  Label:" (e.g. "  Scaffold & Configure Package:") */
+    if (buf[0] == ' ' && buf[1] == ' ' && buf[2] != ' ') {
+        printf("  %s•%s %s\n", COLOR_CYAN, COLOR_RESET, buf + 2);
         return;
     }
 
-    if (strncmp(line, "## ", 3) == 0) {
-        printf("\n%s%s=== ", COLOR_CYAN, COLOR_BOLD);
-        render_inline_markdown(line + 3, true);
-        printf("%s%s ===%s\n", COLOR_CYAN, COLOR_BOLD, COLOR_RESET);
+    /* Code example lines: "    command" (4-space indent) */
+    if (strncmp(buf, "    ", 4) == 0 && buf[4] != '\0' && buf[4] != ' ') {
+        printf("    %s$%s %s%s%s\n", COLOR_YELLOW, COLOR_RESET, COLOR_GREEN, buf + 4, COLOR_RESET);
         return;
     }
 
-    if (strncmp(line, "- ", 2) == 0) {
-        printf("  %s•%s ", COLOR_CYAN, COLOR_RESET);
-        render_inline_markdown(line + 2, true);
-        printf("\n");
-        return;
-    }
-
-    if (strncmp(line, "  ", 2) == 0 && line[2] != '\0' && line[2] != ' ') {
-        printf("    %s$%s %s", COLOR_YELLOW, COLOR_RESET, COLOR_GREEN);
-        render_inline_markdown(line + 2, true);
-        printf("%s\n", COLOR_RESET);
-        return;
-    }
-
-    render_inline_markdown(line, true);
-    printf("\n");
+    /* Everything else: plain text */
+    printf("%s\n", buf);
 }
 
 static void show_help(void) {
-    bool is_tty = isatty(STDOUT_FILENO) != 0 && getenv("NO_COLOR") == NULL;
+    bool use_color = isatty(STDOUT_FILENO) != 0 && getenv("NO_COLOR") == NULL;
 
-    const char *help_filename = is_tty ? "help.md" : "help.txt";
+    /* Always use help.txt — spacing is 1:1 with terminal output */
+    const char *help_filename = "help.txt";
 
     StringArray search_paths;
     str_array_init(&search_paths);
@@ -183,17 +159,17 @@ static void show_help(void) {
     if (fp) {
         char line[1024];
         while (fgets(line, sizeof(line), fp)) {
-            render_markdown_line(line, is_tty);
+            render_plain_line(line, use_color);
         }
         fclose(fp);
     } else {
-        const char *fallback_str = is_tty ? EMBEDDED_HELP_MD : EMBEDDED_HELP_TXT;
-        char *copy = strdup(fallback_str);
+        /* Embedded fallback (always plain text) */
+        char *copy = strdup(EMBEDDED_HELP_TXT);
         if (copy) {
             char *saveptr = NULL;
             char *token = strtok_r(copy, "\n", &saveptr);
             while (token) {
-                render_markdown_line(token, is_tty);
+                render_plain_line(token, use_color);
                 token = strtok_r(NULL, "\n", &saveptr);
             }
             free(copy);
