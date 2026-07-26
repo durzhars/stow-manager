@@ -107,23 +107,43 @@ static void render_markdown_line(char *line, bool is_tty) {
 }
 
 static void show_help(void) {
-    char help_paths[4][PATH_MAX * 2];
-    size_t num_paths = 0;
+    StringArray search_paths;
+    str_array_init(&search_paths);
 
-    const char *home = getenv("HOME");
-    if (home) {
-        snprintf(help_paths[num_paths++], sizeof(help_paths[0]), "%s/.local/share/stow-manager/help.md", home);
-        snprintf(help_paths[num_paths++], sizeof(help_paths[0]), "%s/.config/stow-manager/help.md", home);
+    char data_home[PATH_MAX];
+    get_xdg_data_home(data_home, sizeof(data_home));
+    char p1[PATH_MAX * 2];
+    snprintf(p1, sizeof(p1), "%s/stow-manager/help.md", data_home);
+    str_array_append(&search_paths, p1);
+
+    char config_home[PATH_MAX];
+    get_xdg_config_home(config_home, sizeof(config_home));
+    char p2[PATH_MAX * 2];
+    snprintf(p2, sizeof(p2), "%s/stow-manager/help.md", config_home);
+    str_array_append(&search_paths, p2);
+
+    StringArray data_dirs;
+    str_array_init(&data_dirs);
+    get_xdg_data_dirs(&data_dirs);
+    for (size_t i = 0; i < data_dirs.count; i++) {
+        char path[PATH_MAX * 2];
+        snprintf(path, sizeof(path), "%s/stow-manager/help.md", data_dirs.items[i]);
+        str_array_append(&search_paths, path);
     }
+    str_array_free(&data_dirs);
+
 #ifdef DATADIR
-    snprintf(help_paths[num_paths++], sizeof(help_paths[0]), "%s/stow-manager/help.md", DATADIR);
+    char p3[PATH_MAX * 2];
+    snprintf(p3, sizeof(p3), "%s/stow-manager/help.md", DATADIR);
+    str_array_append(&search_paths, p3);
 #endif
-    snprintf(help_paths[num_paths++], sizeof(help_paths[0]), "resources/help.md");
+
+    str_array_append(&search_paths, "resources/help.md");
 
     FILE *fp = NULL;
-    for (size_t i = 0; i < num_paths; i++) {
-        if (file_exists(help_paths[i])) {
-            fp = fopen(help_paths[i], "r");
+    for (size_t i = 0; i < search_paths.count; i++) {
+        if (file_exists(search_paths.items[i])) {
+            fp = fopen(search_paths.items[i], "r");
             if (fp) break;
         }
     }
@@ -148,6 +168,8 @@ static void show_help(void) {
             free(copy);
         }
     }
+
+    str_array_free(&search_paths);
 }
 
 static void handle_config_command(int argc, char **argv, int optind) {

@@ -33,17 +33,33 @@ void config_free(Config *cfg) {
 }
 
 void get_config_file_path(char *buf, size_t buf_size) {
-    const char *xdg = getenv("XDG_CONFIG_HOME");
-    if (xdg && strlen(xdg) > 0 && xdg[0] == '/') {
-        snprintf(buf, buf_size, "%s/stow-manager/config", xdg);
-    } else {
-        const char *home = getenv("HOME");
-        if (home && strlen(home) > 0) {
-            snprintf(buf, buf_size, "%s/.config/stow-manager/config", home);
-        } else {
-            snprintf(buf, buf_size, "/tmp/.stow-manager.config");
+    char xdg_config[PATH_MAX];
+    get_xdg_config_home(xdg_config, sizeof(xdg_config));
+
+    char primary[PATH_MAX * 2];
+    snprintf(primary, sizeof(primary), "%s/stow-manager/config", xdg_config);
+
+    if (file_exists(primary)) {
+        snprintf(buf, buf_size, "%s", primary);
+        return;
+    }
+
+    StringArray config_dirs;
+    str_array_init(&config_dirs);
+    get_xdg_config_dirs(&config_dirs);
+
+    for (size_t i = 0; i < config_dirs.count; i++) {
+        char sys_path[PATH_MAX * 2];
+        snprintf(sys_path, sizeof(sys_path), "%s/stow-manager/config", config_dirs.items[i]);
+        if (file_exists(sys_path)) {
+            snprintf(buf, buf_size, "%s", sys_path);
+            str_array_free(&config_dirs);
+            return;
         }
     }
+    str_array_free(&config_dirs);
+
+    snprintf(buf, buf_size, "%s", primary);
 }
 
 bool config_load(Config *cfg) {
@@ -93,29 +109,29 @@ bool config_load(Config *cfg) {
 }
 
 bool config_save(const Config *cfg) {
-    char cfg_path[PATH_MAX * 2];
-    snprintf(cfg_path, sizeof(cfg_path), "%s", cfg->config_file_path[0] != '\0' ? cfg->config_file_path : "/tmp/.stow-manager.config");
-
     char dir_path[PATH_MAX * 2];
-    snprintf(dir_path, sizeof(dir_path), "%s", cfg_path);
+    snprintf(dir_path, sizeof(dir_path), "%s", cfg->config_file_path);
     char *last_slash = strrchr(dir_path, '/');
     if (last_slash) {
         *last_slash = '\0';
         mkdir_p(dir_path, 0755);
     }
 
-    FILE *fp = fopen(cfg_path, "w");
-    if (!fp) return false;
+    FILE *fp = fopen(cfg->config_file_path, "w");
+    if (!fp) {
+        log_error("Failed to open config file for writing: %s", cfg->config_file_path);
+        return false;
+    }
 
     fprintf(fp, "# Stow Manager Configuration\n");
-    fprintf(fp, "DOTFILES_DIRS=\"");
+    fprintf(fp, "DOTFILES_DIRS=");
     for (size_t i = 0; i < cfg->dotfiles_dirs.count; i++) {
         fprintf(fp, "%s%s", cfg->dotfiles_dirs.items[i], (i + 1 < cfg->dotfiles_dirs.count) ? ":" : "");
     }
-    fprintf(fp, "\"\n");
+    fprintf(fp, "\n");
 
-    if (strlen(cfg->target_dir) > 0) {
-        fprintf(fp, "TARGET_DIR=\"%s\"\n", cfg->target_dir);
+    if (cfg->target_dir[0] != '\0') {
+        fprintf(fp, "TARGET_DIR=%s\n", cfg->target_dir);
     }
 
     fclose(fp);
@@ -123,23 +139,18 @@ bool config_save(const Config *cfg) {
 }
 
 void config_set_dotfiles_dir(const char *path) {
-    if (!path || strlen(path) == 0) {
-        log_error("Usage: config set dotfiles <path>");
-        return;
-    }
-
     char abs_path[PATH_MAX * 2];
     expand_tilde_path(path, abs_path, sizeof(abs_path));
     normalize_path(abs_path);
 
     if (!is_dir(abs_path)) {
-        log_error("Directory '%s' does not exist or is not a directory!", abs_path);
+        log_error("Directory does not exist: %s", abs_path);
         return;
     }
 
     Config cfg;
     config_init(&cfg);
-    config_load(&cfg);
+    (void)config_load(&cfg);
 
     StringArray new_dirs;
     str_array_init(&new_dirs);
@@ -154,62 +165,54 @@ void config_set_dotfiles_dir(const char *path) {
     str_array_free(&cfg.dotfiles_dirs);
     cfg.dotfiles_dirs = new_dirs;
 
-    config_save(&cfg);
-    log_success("Set primary dotfiles directory to: %s", abs_path);
+    if (config_save(&cfg)) {
+        log_success("Set primary dotfiles directory to: %s", abs_path);
+    }
     config_free(&cfg);
 }
 
 void config_add_dotfiles_dir(const char *path) {
-    if (!path || strlen(path) == 0) {
-        log_error("Usage: config add <path>");
-        return;
-    }
-
     char abs_path[PATH_MAX * 2];
     expand_tilde_path(path, abs_path, sizeof(abs_path));
     normalize_path(abs_path);
 
     if (!is_dir(abs_path)) {
-        log_error("Directory '%s' does not exist or is not a directory!", abs_path);
+        log_error("Directory does not exist: %s", abs_path);
         return;
     }
 
     Config cfg;
     config_init(&cfg);
-    config_load(&cfg);
+    (void)config_load(&cfg);
 
     if (!str_array_contains(&cfg.dotfiles_dirs, abs_path)) {
         str_array_append(&cfg.dotfiles_dirs, abs_path);
-        config_save(&cfg);
-        log_success("Added dotfiles directory: %s", abs_path);
+        if (config_save(&cfg)) {
+            log_success("Added dotfiles directory: %s", abs_path);
+        }
     } else {
-        log_info("Dotfiles directory already configured: %s", abs_path);
+        log_info("Dotfiles directory already registered: %s", abs_path);
     }
 
     config_free(&cfg);
 }
 
 void config_remove_dotfiles_dir(const char *path) {
-    if (!path || strlen(path) == 0) {
-        log_error("Usage: config remove <path>");
-        return;
-    }
-
     char abs_path[PATH_MAX * 2];
     expand_tilde_path(path, abs_path, sizeof(abs_path));
     normalize_path(abs_path);
 
     Config cfg;
     config_init(&cfg);
-    config_load(&cfg);
+    (void)config_load(&cfg);
 
     StringArray new_dirs;
     str_array_init(&new_dirs);
-    bool removed = false;
+    bool found = false;
 
     for (size_t i = 0; i < cfg.dotfiles_dirs.count; i++) {
-        if (strcmp(cfg.dotfiles_dirs.items[i], abs_path) == 0 || strcmp(cfg.dotfiles_dirs.items[i], path) == 0) {
-            removed = true;
+        if (strcmp(cfg.dotfiles_dirs.items[i], abs_path) == 0) {
+            found = true;
         } else {
             str_array_append(&new_dirs, cfg.dotfiles_dirs.items[i]);
         }
@@ -218,66 +221,57 @@ void config_remove_dotfiles_dir(const char *path) {
     str_array_free(&cfg.dotfiles_dirs);
     cfg.dotfiles_dirs = new_dirs;
 
-    if (removed) {
-        config_save(&cfg);
-        log_success("Removed dotfiles directory: %s", abs_path);
+    if (found) {
+        if (config_save(&cfg)) {
+            log_success("Removed dotfiles directory: %s", abs_path);
+        }
     } else {
-        log_warn("Directory '%s' was not found in configuration.", path);
+        log_warn("Directory is not in dotfiles configuration: %s", abs_path);
     }
 
     config_free(&cfg);
 }
 
 void config_set_target_dir(const char *path) {
-    if (!path || strlen(path) == 0) {
-        log_error("Usage: config set target <path>");
-        return;
-    }
-
     char abs_path[PATH_MAX * 2];
     expand_tilde_path(path, abs_path, sizeof(abs_path));
     normalize_path(abs_path);
 
-    if (!is_dir(abs_path)) {
-        log_error("Target directory '%s' does not exist or is not a directory!", abs_path);
-        return;
-    }
-
     Config cfg;
     config_init(&cfg);
-    config_load(&cfg);
+    (void)config_load(&cfg);
 
     snprintf(cfg.target_dir, sizeof(cfg.target_dir), "%s", abs_path);
-    config_save(&cfg);
-    log_success("Set target directory to: %s", abs_path);
+
+    if (config_save(&cfg)) {
+        log_success("Set target directory to: %s", abs_path);
+    }
     config_free(&cfg);
 }
 
 void config_show(void) {
     Config cfg;
     config_init(&cfg);
-    config_load(&cfg);
+    (void)config_load(&cfg);
 
-    printf("\n%s%s=== Stow Manager Configuration ===%s\n\n", COLOR_CYAN, COLOR_BOLD, COLOR_RESET);
-    printf("  %sConfig File Path:%s %s\n", COLOR_BOLD, COLOR_RESET, cfg.config_file_path);
-    printf("  %sDotfiles Repositories:%s\n", COLOR_BOLD, COLOR_RESET);
-    if (cfg.dotfiles_dirs.count > 0) {
-        for (size_t i = 0; i < cfg.dotfiles_dirs.count; i++) {
-            printf("    %s%zu.%s %s%s\n", COLOR_CYAN, i + 1, COLOR_RESET, cfg.dotfiles_dirs.items[i], (i == 0) ? " (primary)" : "");
-        }
+    printf("\n=== Stow Manager Configuration ===\n\n");
+    printf("  Config File Path: %s\n", cfg.config_file_path);
+
+    printf("  Dotfiles Repositories:\n");
+    if (cfg.dotfiles_dirs.count == 0) {
+        printf("    (none configured - using current working directory fallback)\n");
     } else {
-        char cwd[PATH_MAX];
-        get_dotfiles_dir(cwd, sizeof(cwd));
-        printf("    %s (default current directory)\n", cwd);
+        for (size_t i = 0; i < cfg.dotfiles_dirs.count; i++) {
+            printf("    %zu. %s%s\n", i + 1, cfg.dotfiles_dirs.items[i], (i == 0) ? " (primary)" : "");
+        }
     }
 
-    printf("  %sTarget Directory:%s ", COLOR_BOLD, COLOR_RESET);
-    if (strlen(cfg.target_dir) > 0) {
-        printf("%s%s%s\n", COLOR_GREEN, cfg.target_dir, COLOR_RESET);
+    if (cfg.target_dir[0] != '\0') {
+        printf("  Target Directory: %s (configured)\n", cfg.target_dir);
     } else {
-        char tgt[PATH_MAX];
-        get_target_dir(tgt, sizeof(tgt));
-        printf("%s (fallback environment $HOME)\n", tgt);
+        char default_target[PATH_MAX];
+        get_target_dir(default_target, sizeof(default_target));
+        printf("  Target Directory: %s (fallback environment $HOME)\n", default_target);
     }
     printf("\n");
 
@@ -286,26 +280,26 @@ void config_show(void) {
 
 void get_active_dotfiles_dir(const char *cli_override, char *buf, size_t buf_size) {
     if (cli_override && strlen(cli_override) > 0) {
-        snprintf(buf, buf_size, "%s", cli_override);
+        expand_tilde_path(cli_override, buf, buf_size);
         normalize_path(buf);
         return;
     }
 
-    const char *env_dot = getenv("STOW_DOTFILES_DIR");
-    if (!env_dot) env_dot = getenv("DOTFILES_DIR");
-    if (env_dot && strlen(env_dot) > 0) {
-        snprintf(buf, buf_size, "%s", env_dot);
+    const char *env_dir = getenv("STOW_DOTFILES_DIR");
+    if (!env_dir) env_dir = getenv("DOTFILES_DIR");
+    if (env_dir && strlen(env_dir) > 0) {
+        expand_tilde_path(env_dir, buf, buf_size);
         normalize_path(buf);
         return;
     }
 
-    char cwd[PATH_MAX];
+    char cwd[PATH_MAX * 2];
     if (getcwd(cwd, sizeof(cwd))) {
-        char reg[PATH_MAX * 2];
-        join_path(reg, sizeof(reg), cwd, "stow.registry");
-        if (file_exists(reg)) {
+        char test_reg1[PATH_MAX * 2], test_reg2[PATH_MAX * 2];
+        join_path(test_reg1, sizeof(test_reg1), cwd, "stow.registry");
+        join_path(test_reg2, sizeof(test_reg2), cwd, ".stowregistry");
+        if (file_exists(test_reg1) || file_exists(test_reg2)) {
             snprintf(buf, buf_size, "%s", cwd);
-            normalize_path(buf);
             return;
         }
     }
@@ -315,40 +309,36 @@ void get_active_dotfiles_dir(const char *cli_override, char *buf, size_t buf_siz
     if (config_load(&cfg) && cfg.dotfiles_dirs.count > 0) {
         snprintf(buf, buf_size, "%s", cfg.dotfiles_dirs.items[0]);
         config_free(&cfg);
-        normalize_path(buf);
         return;
     }
     config_free(&cfg);
 
     get_dotfiles_dir(buf, buf_size);
-    normalize_path(buf);
 }
 
 void get_active_target_dir(const char *cli_override, char *buf, size_t buf_size) {
     if (cli_override && strlen(cli_override) > 0) {
-        snprintf(buf, buf_size, "%s", cli_override);
+        expand_tilde_path(cli_override, buf, buf_size);
         normalize_path(buf);
         return;
     }
 
-    const char *env_tgt = getenv("STOW_TARGET_DIR");
-    if (!env_tgt) env_tgt = getenv("TARGET_DIR");
-    if (env_tgt && strlen(env_tgt) > 0) {
-        snprintf(buf, buf_size, "%s", env_tgt);
+    const char *env_target = getenv("STOW_TARGET_DIR");
+    if (!env_target) env_target = getenv("TARGET_DIR");
+    if (env_target && strlen(env_target) > 0) {
+        expand_tilde_path(env_target, buf, buf_size);
         normalize_path(buf);
         return;
     }
 
     Config cfg;
     config_init(&cfg);
-    if (config_load(&cfg) && strlen(cfg.target_dir) > 0) {
+    if (config_load(&cfg) && cfg.target_dir[0] != '\0') {
         snprintf(buf, buf_size, "%s", cfg.target_dir);
         config_free(&cfg);
-        normalize_path(buf);
         return;
     }
     config_free(&cfg);
 
     get_target_dir(buf, buf_size);
-    normalize_path(buf);
 }

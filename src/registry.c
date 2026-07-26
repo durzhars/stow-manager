@@ -25,11 +25,38 @@ static FILE *open_registry_file(const char *dotfiles_dir) {
     char path[PATH_MAX * 2];
     snprintf(path, sizeof(path), "%s/stow.registry", dotfiles_dir);
     FILE *fp = fopen(path, "r");
-    if (!fp) {
-        snprintf(path, sizeof(path), "%s/.stowregistry", dotfiles_dir);
+    if (fp) return fp;
+
+    snprintf(path, sizeof(path), "%s/.stowregistry", dotfiles_dir);
+    fp = fopen(path, "r");
+    if (fp) return fp;
+
+    char data_home[PATH_MAX];
+    get_xdg_data_home(data_home, sizeof(data_home));
+    snprintf(path, sizeof(path), "%s/stow-manager/stow.registry", data_home);
+    fp = fopen(path, "r");
+    if (fp) return fp;
+
+    char config_home[PATH_MAX];
+    get_xdg_config_home(config_home, sizeof(config_home));
+    snprintf(path, sizeof(path), "%s/stow-manager/stow.registry", config_home);
+    fp = fopen(path, "r");
+    if (fp) return fp;
+
+    StringArray data_dirs;
+    str_array_init(&data_dirs);
+    get_xdg_data_dirs(&data_dirs);
+    for (size_t i = 0; i < data_dirs.count; i++) {
+        snprintf(path, sizeof(path), "%s/stow-manager/stow.registry", data_dirs.items[i]);
         fp = fopen(path, "r");
+        if (fp) {
+            str_array_free(&data_dirs);
+            return fp;
+        }
     }
-    return fp;
+    str_array_free(&data_dirs);
+
+    return NULL;
 }
 
 void registry_get_aliases(const char *dotfiles_dir, const char *tool, StringArray *aliases) {
@@ -45,6 +72,7 @@ void registry_get_aliases(const char *dotfiles_dir, const char *tool, StringArra
     bool found = false;
 
     while ((linelen = getline(&linebuf, &linecap, fp)) != -1) {
+        (void)linelen;
         char *trimmed = trim_whitespace(linebuf);
         if (trimmed[0] == '#' || trimmed[0] == '\0') continue;
 
@@ -59,9 +87,9 @@ void registry_get_aliases(const char *dotfiles_dir, const char *tool, StringArra
                 char *saveptr = NULL;
                 char *token = strtok_r(val, "|", &saveptr);
                 while (token) {
-                    char *alias = trim_whitespace(token);
-                    if (strlen(alias) > 0) {
-                        str_array_append(aliases, alias);
+                    char *p = trim_whitespace(token);
+                    if (strlen(p) > 0 && !str_array_contains(aliases, p)) {
+                        str_array_append(aliases, p);
                     }
                     token = strtok_r(NULL, "|", &saveptr);
                 }
@@ -69,28 +97,30 @@ void registry_get_aliases(const char *dotfiles_dir, const char *tool, StringArra
             }
         }
     }
-    free(linebuf);
-    fclose(fp);
 
-    if (!found || aliases->count == 0) {
+    if (!found) {
         str_array_append(aliases, tool);
     }
+
+    free(linebuf);
+    fclose(fp);
 }
 
-void registry_get_distro_pkg(const char *dotfiles_dir, const char *tool, const char *distro, char *out, size_t out_size) {
-    snprintf(out, out_size, "%s", tool);
+void registry_get_distro_pkg(const char *dotfiles_dir, const char *tool, const char *distro_id, char *pkg_out, size_t pkg_out_size) {
+    snprintf(pkg_out, pkg_out_size, "%s", tool);
 
     FILE *fp = open_registry_file(dotfiles_dir);
     if (!fp) return;
 
-    char target_key[256];
-    snprintf(target_key, sizeof(target_key), "%s@%s", tool, distro);
+    char key_distro[256];
+    snprintf(key_distro, sizeof(key_distro), "%s@%s", tool, distro_id);
 
     char *linebuf = NULL;
     size_t linecap = 0;
     ssize_t linelen;
 
     while ((linelen = getline(&linebuf, &linecap, fp)) != -1) {
+        (void)linelen;
         char *trimmed = trim_whitespace(linebuf);
         if (trimmed[0] == '#' || trimmed[0] == '\0') continue;
 
@@ -100,12 +130,13 @@ void registry_get_distro_pkg(const char *dotfiles_dir, const char *tool, const c
             char *key = trim_whitespace(trimmed);
             char *val = trim_whitespace(eq + 1);
 
-            if (strcmp(key, target_key) == 0) {
-                snprintf(out, out_size, "%s", val);
+            if (strcmp(key, key_distro) == 0) {
+                snprintf(pkg_out, pkg_out_size, "%s", val);
                 break;
             }
         }
     }
+
     free(linebuf);
     fclose(fp);
 }
@@ -119,6 +150,7 @@ void registry_get_all_tools(const char *dotfiles_dir, StringArray *tools) {
     ssize_t linelen;
 
     while ((linelen = getline(&linebuf, &linecap, fp)) != -1) {
+        (void)linelen;
         char *trimmed = trim_whitespace(linebuf);
         if (trimmed[0] == '#' || trimmed[0] == '\0') continue;
 
@@ -126,11 +158,15 @@ void registry_get_all_tools(const char *dotfiles_dir, StringArray *tools) {
         if (eq) {
             *eq = '\0';
             char *key = trim_whitespace(trimmed);
-            if (!strchr(key, '@') && !str_array_contains(tools, key)) {
-                str_array_append(tools, key);
+            char *at = strchr(key, '@');
+            if (at) *at = '\0';
+            char *tool = trim_whitespace(key);
+            if (strlen(tool) > 0 && !str_array_contains(tools, tool)) {
+                str_array_append(tools, tool);
             }
         }
     }
+
     free(linebuf);
     fclose(fp);
 }
@@ -145,7 +181,7 @@ bool is_tool_installed_dynamic(const char *dotfiles_dir, const char *tool) {
         const char *entry = aliases.items[i];
         if (strncmp(entry, "plugin:", 7) == 0) {
             const char *plugin_path = entry + 7;
-            char expanded[PATH_MAX];
+            char expanded[PATH_MAX * 2];
             expand_tilde_path(plugin_path, expanded, sizeof(expanded));
             if (access(expanded, R_OK) == 0) {
                 installed = true;

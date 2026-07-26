@@ -27,6 +27,100 @@
 
 static StringArray g_temp_paths = {NULL, 0, 0};
 
+void get_xdg_config_home(char *buf, size_t buf_size) {
+    const char *env = getenv("XDG_CONFIG_HOME");
+    if (env && strlen(env) > 0 && env[0] == '/') {
+        snprintf(buf, buf_size, "%s", env);
+    } else {
+        const char *home = getenv("HOME");
+        if (home && strlen(home) > 0) {
+            snprintf(buf, buf_size, "%s/.config", home);
+        } else {
+            snprintf(buf, buf_size, "/tmp");
+        }
+    }
+}
+
+void get_xdg_data_home(char *buf, size_t buf_size) {
+    const char *env = getenv("XDG_DATA_HOME");
+    if (env && strlen(env) > 0 && env[0] == '/') {
+        snprintf(buf, buf_size, "%s", env);
+    } else {
+        const char *home = getenv("HOME");
+        if (home && strlen(home) > 0) {
+            snprintf(buf, buf_size, "%s/.local/share", home);
+        } else {
+            snprintf(buf, buf_size, "/tmp");
+        }
+    }
+}
+
+void get_xdg_cache_home(char *buf, size_t buf_size) {
+    const char *env = getenv("XDG_CACHE_HOME");
+    if (env && strlen(env) > 0 && env[0] == '/') {
+        snprintf(buf, buf_size, "%s", env);
+    } else {
+        const char *home = getenv("HOME");
+        if (home && strlen(home) > 0) {
+            snprintf(buf, buf_size, "%s/.cache", home);
+        } else {
+            snprintf(buf, buf_size, "/tmp");
+        }
+    }
+}
+
+void get_xdg_state_home(char *buf, size_t buf_size) {
+    const char *env = getenv("XDG_STATE_HOME");
+    if (env && strlen(env) > 0 && env[0] == '/') {
+        snprintf(buf, buf_size, "%s", env);
+    } else {
+        const char *home = getenv("HOME");
+        if (home && strlen(home) > 0) {
+            snprintf(buf, buf_size, "%s/.local/state", home);
+        } else {
+            snprintf(buf, buf_size, "/tmp");
+        }
+    }
+}
+
+void get_xdg_data_dirs(StringArray *dirs) {
+    const char *env = getenv("XDG_DATA_DIRS");
+    if (!env || strlen(env) == 0) {
+        env = "/usr/local/share:/usr/share";
+    }
+    char *copy = strdup(env);
+    if (!copy) return;
+
+    char *saveptr = NULL;
+    char *token = strtok_r(copy, ":", &saveptr);
+    while (token) {
+        if (strlen(token) > 0) {
+            str_array_append(dirs, token);
+        }
+        token = strtok_r(NULL, ":", &saveptr);
+    }
+    free(copy);
+}
+
+void get_xdg_config_dirs(StringArray *dirs) {
+    const char *env = getenv("XDG_CONFIG_DIRS");
+    if (!env || strlen(env) == 0) {
+        env = "/etc/xdg";
+    }
+    char *copy = strdup(env);
+    if (!copy) return;
+
+    char *saveptr = NULL;
+    char *token = strtok_r(copy, ":", &saveptr);
+    while (token) {
+        if (strlen(token) > 0) {
+            str_array_append(dirs, token);
+        }
+        token = strtok_r(NULL, ":", &saveptr);
+    }
+    free(copy);
+}
+
 void register_temp_path(const char *path) {
     if (!path) return;
     if (!str_array_contains(&g_temp_paths, path)) {

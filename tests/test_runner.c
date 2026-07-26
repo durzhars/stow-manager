@@ -56,6 +56,22 @@ static void test_string_array(void) {
     ASSERT(arr.count == 0, "Array count should be 0 after free");
 }
 
+static void test_xdg_paths(void) {
+    char cfg_home[PATH_MAX];
+    get_xdg_config_home(cfg_home, sizeof(cfg_home));
+    ASSERT(strlen(cfg_home) > 0, "XDG_CONFIG_HOME should not be empty");
+
+    char data_home[PATH_MAX];
+    get_xdg_data_home(data_home, sizeof(data_home));
+    ASSERT(strlen(data_home) > 0, "XDG_DATA_HOME should not be empty");
+
+    StringArray data_dirs;
+    str_array_init(&data_dirs);
+    get_xdg_data_dirs(&data_dirs);
+    ASSERT(data_dirs.count > 0, "XDG_DATA_DIRS should yield at least 1 directory");
+    str_array_free(&data_dirs);
+}
+
 static void test_manifest_load_save(void) {
     char tmp_dir[] = "/tmp/stow_test_XXXXXX";
     ASSERT(mkdtemp(tmp_dir) != NULL, "Should create temporary test directory");
@@ -200,6 +216,7 @@ int main(void) {
 
     RUN_TEST(test_trim_whitespace);
     RUN_TEST(test_string_array);
+    RUN_TEST(test_xdg_paths);
     RUN_TEST(test_manifest_load_save);
     RUN_TEST(test_registry_parsing);
     RUN_TEST(test_dry_run_stow);
