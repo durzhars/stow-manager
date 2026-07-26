@@ -1,8 +1,14 @@
 # Makefile for Dotfiles Stow Manager (ISO C17)
 
 PREFIX ?= /usr/local
+EXEC_PREFIX ?= $(PREFIX)
+BINDIR ?= $(EXEC_PREFIX)/bin
+DATAROOTDIR ?= $(PREFIX)/share
+DATADIR ?= $(DATAROOTDIR)
+SYSCONFDIR ?= $(PREFIX)/etc
+
 CC ?= gcc
-CFLAGS ?= -Wall -Wextra -pedantic -Wconversion -Wsign-conversion -std=c17 -O2 -Iinclude -DDATADIR=\"$(PREFIX)/share\"
+CFLAGS ?= -Wall -Wextra -pedantic -Wconversion -Wsign-conversion -std=c17 -O2 -Iinclude -DDATADIR=\"$(DATADIR)\" -DSYSCONFDIR=\"$(SYSCONFDIR)\"
 LDFLAGS ?=
 
 SRC_DIR = src
@@ -29,7 +35,7 @@ TEST_OBJS = $(BUILD_DIR)/test_runner.o \
             $(filter-out $(BUILD_DIR)/main.o,$(OBJS))
 TEST_TARGET = $(BIN_DIR)/test_runner
 
-.PHONY: all clean static install test
+.PHONY: all clean static install test uninstall
 
 all: $(TARGET)
 
@@ -61,7 +67,11 @@ clean:
 	rm -rf $(BUILD_DIR) $(BIN_DIR)
 
 install: $(TARGET)
-	install -d $(DESTDIR)$(PREFIX)/bin
-	install -m 755 $(TARGET) $(DESTDIR)$(PREFIX)/bin/stow-manager
-	install -d $(DESTDIR)$(PREFIX)/share/stow-manager
-	install -m 644 resources/help.md $(DESTDIR)$(PREFIX)/share/stow-manager/help.md
+	install -d $(DESTDIR)$(BINDIR)
+	install -m 755 $(TARGET) $(DESTDIR)$(BINDIR)/stow-manager
+	install -d $(DESTDIR)$(DATADIR)/stow-manager
+	install -m 644 resources/help.md $(DESTDIR)$(DATADIR)/stow-manager/help.md
+
+uninstall:
+	rm -f $(DESTDIR)$(BINDIR)/stow-manager
+	rm -rf $(DESTDIR)$(DATADIR)/stow-manager
