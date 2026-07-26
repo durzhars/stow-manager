@@ -24,7 +24,7 @@
 #include "config.h"
 
 static void show_help(const char *prog_name) {
-    printf("%sModular ANSI C Dotfiles Framework Manager%s\n", COLOR_BOLD, COLOR_RESET);
+    printf("%sDotfiles Stow Manager (stow-manager)%s\n", COLOR_BOLD, COLOR_RESET);
     printf("Usage: %s [options] <command> [arguments]\n\n", prog_name);
     printf("Options:\n");
     printf("  %s-d, --dotfiles-dir%s <path>        Set dotfiles repository directory for current command\n", COLOR_CYAN, COLOR_RESET);
@@ -33,11 +33,10 @@ static void show_help(const char *prog_name) {
     printf("  %s-n, --dry-run%s                  Dry-run mode (preview changes without modifying disk)\n", COLOR_CYAN, COLOR_RESET);
     printf("  %s-h, --help%s                     Show this help menu\n\n", COLOR_CYAN, COLOR_RESET);
     printf("Configuration Commands:\n");
-    printf("  %sconfig:set%s [dotfiles] <path>   Set primary dotfiles repository directory in config file\n", COLOR_CYAN, COLOR_RESET);
-    printf("  %sconfig:add%s <path>              Add additional dotfiles repository directory\n", COLOR_CYAN, COLOR_RESET);
-    printf("  %sconfig:remove%s <path>           Remove a dotfiles repository directory from config file\n", COLOR_CYAN, COLOR_RESET);
-    printf("  %sconfig:target%s <path>           Set default target home directory in config file\n", COLOR_CYAN, COLOR_RESET);
-    printf("  %sconfig:show%s                    Display current configuration settings & paths\n\n", COLOR_CYAN, COLOR_RESET);
+    printf("  %sconfig show%s                      Display current configuration settings & paths\n", COLOR_CYAN, COLOR_RESET);
+    printf("  %sconfig set%s [dotfiles|target] <path> Set primary dotfiles/target directory in config file\n", COLOR_CYAN, COLOR_RESET);
+    printf("  %sconfig add%s <path>                Add an additional dotfiles repository directory\n", COLOR_CYAN, COLOR_RESET);
+    printf("  %sconfig remove%s <path>             Remove a dotfiles repository directory from config\n\n", COLOR_CYAN, COLOR_RESET);
     printf("Dependency Management Commands:\n");
     printf("  %sdeps:add%s <pkg> <dep> [--opt]   Add a dependency/conflict to package manifest\n", COLOR_CYAN, COLOR_RESET);
     printf("  %sdeps:remove%s <pkg> <dep>        Remove a dependency from package manifest\n", COLOR_CYAN, COLOR_RESET);
@@ -68,7 +67,7 @@ static void handle_config_command(int argc, char **argv, int optind) {
 
     if (strcmp(cmd, "config:target") == 0) {
         if (remaining < 1) {
-            log_error("Usage: %s config:target <path>", argv[0]);
+            log_error("Usage: %s config target <path>", argv[0]);
             return;
         }
         config_set_target_dir(argv[optind + 1]);
@@ -77,7 +76,7 @@ static void handle_config_command(int argc, char **argv, int optind) {
 
     if (strcmp(cmd, "config:add") == 0) {
         if (remaining < 1) {
-            log_error("Usage: %s config:add <path>", argv[0]);
+            log_error("Usage: %s config add <path>", argv[0]);
             return;
         }
         config_add_dotfiles_dir(argv[optind + 1]);
@@ -86,7 +85,7 @@ static void handle_config_command(int argc, char **argv, int optind) {
 
     if (strcmp(cmd, "config:remove") == 0 || strcmp(cmd, "config:rm") == 0) {
         if (remaining < 1) {
-            log_error("Usage: %s config:remove <path>", argv[0]);
+            log_error("Usage: %s config remove <path>", argv[0]);
             return;
         }
         config_remove_dotfiles_dir(argv[optind + 1]);
