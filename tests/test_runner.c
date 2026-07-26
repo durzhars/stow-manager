@@ -61,6 +61,15 @@ static void test_path_normalization(void) {
 
     join_path(out, sizeof(out), "/home/user", ".config/nvim");
     ASSERT_STR_EQ(out, "/home/user/.config/nvim");
+
+    ASSERT(is_path_prefix("/home/user/dotfiles/nvim", "/home/user/dotfiles"), "Prefix match should succeed");
+    ASSERT(!is_path_prefix("/home/user/dotfiles-backup/file", "/home/user/dotfiles"), "Similar prefix without slash boundary must fail");
+}
+
+static void test_shell_escaping(void) {
+    char esc[1024];
+    escape_shell_arg("/home/user/my\"dir/$test", esc, sizeof(esc));
+    ASSERT_STR_EQ(esc, "/home/user/my\\\"dir/\\$test");
 }
 
 static void test_package_discovery(void) {
@@ -252,6 +261,7 @@ int main(void) {
     RUN_TEST(test_trim_whitespace);
     RUN_TEST(test_mkdir_p);
     RUN_TEST(test_path_normalization);
+    RUN_TEST(test_shell_escaping);
     RUN_TEST(test_package_discovery);
     RUN_TEST(test_string_array);
     RUN_TEST(test_manifest_load_save);
