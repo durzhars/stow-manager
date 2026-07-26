@@ -39,6 +39,11 @@ static void build_install_command(const char *dotfiles_dir, const char *distro, 
     }
 }
 
+static void flush_stdin(void) {
+    int c;
+    while ((c = getchar()) != '\n' && c != EOF);
+}
+
 void check_package_dependencies(const char *dotfiles_dir, const char *target_pkg, bool auto_install) {
     char distro[64];
     get_distro_id(distro, sizeof(distro));
@@ -101,7 +106,7 @@ void check_package_dependencies(const char *dotfiles_dir, const char *target_pkg
 
     if (missing_req.count > 0) {
         log_error("Missing REQUIRED dependencies!");
-        char install_cmd[1024];
+        char install_cmd[4096];
         build_install_command(dotfiles_dir, distro, &missing_req, install_cmd, sizeof(install_cmd));
         printf("%sInstallation Command (%s):%s %s%s%s\n\n", COLOR_BOLD, distro, COLOR_RESET, COLOR_CYAN, install_cmd, COLOR_RESET);
 
@@ -111,6 +116,7 @@ void check_package_dependencies(const char *dotfiles_dir, const char *target_pkg
             printf("Would you like to install missing REQUIRED dependencies now? [Y/n] ");
             fflush(stdout);
             char c = getchar();
+            if (c != '\n' && c != EOF) flush_stdin();
             if (c == 'y' || c == 'Y' || c == '\n') {
                 run_system_cmd(install_cmd);
             }
@@ -119,7 +125,7 @@ void check_package_dependencies(const char *dotfiles_dir, const char *target_pkg
 
     if (missing_opt.count > 0) {
         log_warn("Missing OPTIONAL plugins & tools!");
-        char install_cmd[1024];
+        char install_cmd[4096];
         build_install_command(dotfiles_dir, distro, &missing_opt, install_cmd, sizeof(install_cmd));
         printf("%sInstallation Command (%s):%s %s%s%s\n\n", COLOR_BOLD, distro, COLOR_RESET, COLOR_CYAN, install_cmd, COLOR_RESET);
 
@@ -129,6 +135,7 @@ void check_package_dependencies(const char *dotfiles_dir, const char *target_pkg
             printf("Would you like to install missing OPTIONAL plugins & tools now? [y/N] ");
             fflush(stdout);
             char c = getchar();
+            if (c != '\n' && c != EOF) flush_stdin();
             if (c == 'y' || c == 'Y') {
                 run_system_cmd(install_cmd);
             }
@@ -213,10 +220,10 @@ static void scan_unmanaged_cb(const char *symlink_path, void *user_data) {
             }
 
             if (strlen(pkg_name) > 0) {
-                char pkg_dir[PATH_MAX * 2];
-                snprintf(pkg_dir, sizeof(pkg_dir), "%s/%s", ctx->dotfiles_dir, pkg_name);
-                if (!is_dir(pkg_dir)) {
-                    log_warn("Unmanaged symlink from removed package: %s -> %s (package '%s' directory missing)", symlink_path, target, pkg_name);
+                char pkg_entry[PATH_MAX * 2];
+                join_path(pkg_entry, sizeof(pkg_entry), ctx->dotfiles_dir, pkg_name);
+                if (!is_dir(pkg_entry) && !file_exists(pkg_entry)) {
+                    log_warn("Unmanaged symlink from removed package: %s -> %s (package '%s' missing)", symlink_path, target, pkg_name);
                     ctx->unmanaged_count++;
                 }
             }
