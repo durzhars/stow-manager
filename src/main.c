@@ -191,6 +191,7 @@ int main(int argc, char **argv) {
         return 0;
     }
 
+    int status = 0;
     const char *cmd = argv[optind];
     char dotfiles_dir[PATH_MAX];
     char target_dir[PATH_MAX];
@@ -247,7 +248,8 @@ int main(int argc, char **argv) {
                 if (strcmp(argv[i], "all") == 0) {
                     stow_all_packages(dotfiles_dir, target_dir, auto_install, true);
                 } else {
-                    stow_package(dotfiles_dir, target_dir, argv[i], auto_install, true);
+                    int res = stow_package(dotfiles_dir, target_dir, argv[i], auto_install, true);
+                    if (res != 0) status = res;
                 }
             }
         }
@@ -273,7 +275,8 @@ int main(int argc, char **argv) {
             return 1;
         }
         for (int i = optind + 1; i < argc; i++) {
-            stow_package(dotfiles_dir, target_dir, argv[i], auto_install, dry_run);
+            int res = stow_package(dotfiles_dir, target_dir, argv[i], auto_install, dry_run);
+            if (res != 0) status = res;
         }
     } else if (strcmp(cmd, "unstow") == 0) {
         if (optind + 1 >= argc) {
@@ -281,7 +284,8 @@ int main(int argc, char **argv) {
             return 1;
         }
         for (int i = optind + 1; i < argc; i++) {
-            unstow_package(dotfiles_dir, target_dir, argv[i], dry_run);
+            int res = unstow_package(dotfiles_dir, target_dir, argv[i], dry_run);
+            if (res != 0) status = res;
         }
     } else if (strcmp(cmd, "restow") == 0) {
         if (optind + 1 >= argc) {
@@ -289,7 +293,8 @@ int main(int argc, char **argv) {
             return 1;
         }
         for (int i = optind + 1; i < argc; i++) {
-            restow_package(dotfiles_dir, target_dir, argv[i], auto_install, dry_run);
+            int res = restow_package(dotfiles_dir, target_dir, argv[i], auto_install, dry_run);
+            if (res != 0) status = res;
         }
     } else if (strcmp(cmd, "fix-conflicts") == 0) {
         unfold_directory_symlinks(target_dir, dotfiles_dir, dry_run);
@@ -303,10 +308,12 @@ int main(int argc, char **argv) {
             char pkg_dir[PATH_MAX * 2];
             join_path(pkg_dir, sizeof(pkg_dir), dotfiles_dir, argv[i]);
             if (is_dir(pkg_dir)) {
-                stow_package(dotfiles_dir, target_dir, argv[i], auto_install, dry_run);
+                int res = stow_package(dotfiles_dir, target_dir, argv[i], auto_install, dry_run);
+                if (res != 0) status = res;
                 any_stowed = true;
             } else {
                 log_error("Unknown command or package '%s'", argv[i]);
+                status = 1;
             }
         }
         if (!any_stowed) {
@@ -315,5 +322,5 @@ int main(int argc, char **argv) {
         }
     }
 
-    return 0;
+    return status;
 }

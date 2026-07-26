@@ -63,11 +63,11 @@ bool manifest_load(PackageManifest *manifest, const char *dotfiles_dir) {
 
 bool manifest_save(const PackageManifest *manifest, const char *dotfiles_dir) {
     char pkg_dir[PATH_MAX * 2];
-    snprintf(pkg_dir, sizeof(pkg_dir), "%s/%s", dotfiles_dir, manifest->package_name);
-    mkdir(pkg_dir, 0755);
+    join_path(pkg_dir, sizeof(pkg_dir), dotfiles_dir, manifest->package_name);
+    mkdir_p(pkg_dir, 0755);
 
     char path[PATH_MAX * 4];
-    snprintf(path, sizeof(path), "%s/.stowdeps", pkg_dir);
+    join_path(path, sizeof(path), pkg_dir, ".stowdeps");
 
     FILE *fp = fopen(path, "w");
     if (!fp) return false;
