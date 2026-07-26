@@ -16,11 +16,11 @@ void config_free(Config *cfg) {
 
 void get_config_file_path(char *buf, size_t buf_size) {
     const char *xdg = getenv("XDG_CONFIG_HOME");
-    if (xdg && strlen(xdg) > 0) {
+    if (xdg && strlen(xdg) > 0 && xdg[0] == '/') {
         snprintf(buf, buf_size, "%s/stow-manager/config", xdg);
     } else {
         const char *home = getenv("HOME");
-        if (home) {
+        if (home && strlen(home) > 0) {
             snprintf(buf, buf_size, "%s/.config/stow-manager/config", home);
         } else {
             snprintf(buf, buf_size, "/tmp/.stow-manager.config");
@@ -75,9 +75,7 @@ bool config_save(const Config *cfg) {
     char *last_slash = strrchr(path_copy, '/');
     if (last_slash) {
         *last_slash = '\0';
-        char mkdir_cmd[PATH_MAX + 32];
-        snprintf(mkdir_cmd, sizeof(mkdir_cmd), "mkdir -p \"%s\"", path_copy);
-        run_system_cmd(mkdir_cmd);
+        mkdir_p(path_copy, 0755);
     }
 
     FILE *fp = fopen(cfg->config_file_path, "w");
@@ -102,14 +100,19 @@ bool config_save(const Config *cfg) {
 
 void config_set_dotfiles_dir(const char *path) {
     Config cfg;
+    config_init(&cfg);
     config_load(&cfg);
+
+    char clean_path[PATH_MAX];
+    snprintf(clean_path, sizeof(clean_path), "%s", path);
+    normalize_path(clean_path);
 
     str_array_free(&cfg.dotfiles_dirs);
     str_array_init(&cfg.dotfiles_dirs);
-    str_array_append(&cfg.dotfiles_dirs, path);
+    str_array_append(&cfg.dotfiles_dirs, clean_path);
 
     if (config_save(&cfg)) {
-        log_success("Set dotfiles repository path to: %s", path);
+        log_success("Set dotfiles repository path to: %s", clean_path);
         log_info("Saved configuration to '%s'", cfg.config_file_path);
     } else {
         log_error("Failed to save configuration file '%s'", cfg.config_file_path);
@@ -120,18 +123,23 @@ void config_set_dotfiles_dir(const char *path) {
 
 void config_add_dotfiles_dir(const char *path) {
     Config cfg;
+    config_init(&cfg);
     config_load(&cfg);
 
-    if (!str_array_contains(&cfg.dotfiles_dirs, path)) {
-        str_array_append(&cfg.dotfiles_dirs, path);
+    char clean_path[PATH_MAX];
+    snprintf(clean_path, sizeof(clean_path), "%s", path);
+    normalize_path(clean_path);
+
+    if (!str_array_contains(&cfg.dotfiles_dirs, clean_path)) {
+        str_array_append(&cfg.dotfiles_dirs, clean_path);
         if (config_save(&cfg)) {
-            log_success("Added dotfiles repository path: %s", path);
+            log_success("Added dotfiles repository path: %s", clean_path);
             log_info("Saved configuration to '%s'", cfg.config_file_path);
         } else {
             log_error("Failed to save configuration file '%s'", cfg.config_file_path);
         }
     } else {
-        log_warn("Dotfiles repository path already exists in config: %s", path);
+        log_warn("Dotfiles repository path already exists in config: %s", clean_path);
     }
 
     config_free(&cfg);
@@ -139,12 +147,14 @@ void config_add_dotfiles_dir(const char *path) {
 
 void config_set_target_dir(const char *path) {
     Config cfg;
+    config_init(&cfg);
     config_load(&cfg);
 
     snprintf(cfg.target_dir, sizeof(cfg.target_dir), "%s", path);
+    normalize_path(cfg.target_dir);
 
     if (config_save(&cfg)) {
-        log_success("Set target home directory to: %s", path);
+        log_success("Set target home directory to: %s", cfg.target_dir);
         log_info("Saved configuration to '%s'", cfg.config_file_path);
     } else {
         log_error("Failed to save configuration file '%s'", cfg.config_file_path);
@@ -155,6 +165,7 @@ void config_set_target_dir(const char *path) {
 
 void config_show(void) {
     Config cfg;
+    config_init(&cfg);
     bool loaded = config_load(&cfg);
 
     printf("\n%s%s=== Stow Manager Configuration Settings ===%s\n\n", COLOR_CYAN, COLOR_BOLD, COLOR_RESET);
@@ -187,6 +198,7 @@ void config_show(void) {
 void get_active_dotfiles_dir(const char *cli_override, char *buf, size_t buf_size) {
     if (cli_override && strlen(cli_override) > 0) {
         snprintf(buf, buf_size, "%s", cli_override);
+        normalize_path(buf);
         return;
     }
 
@@ -194,23 +206,28 @@ void get_active_dotfiles_dir(const char *cli_override, char *buf, size_t buf_siz
     if (!env_dot) env_dot = getenv("DOTFILES_DIR");
     if (env_dot && strlen(env_dot) > 0) {
         snprintf(buf, buf_size, "%s", env_dot);
+        normalize_path(buf);
         return;
     }
 
     Config cfg;
+    config_init(&cfg);
     if (config_load(&cfg) && cfg.dotfiles_dirs.count > 0) {
         snprintf(buf, buf_size, "%s", cfg.dotfiles_dirs.items[0]);
         config_free(&cfg);
+        normalize_path(buf);
         return;
     }
     config_free(&cfg);
 
     get_dotfiles_dir(buf, buf_size);
+    normalize_path(buf);
 }
 
 void get_active_target_dir(const char *cli_override, char *buf, size_t buf_size) {
     if (cli_override && strlen(cli_override) > 0) {
         snprintf(buf, buf_size, "%s", cli_override);
+        normalize_path(buf);
         return;
     }
 
@@ -218,16 +235,20 @@ void get_active_target_dir(const char *cli_override, char *buf, size_t buf_size)
     if (!env_tgt) env_tgt = getenv("TARGET_DIR");
     if (env_tgt && strlen(env_tgt) > 0) {
         snprintf(buf, buf_size, "%s", env_tgt);
+        normalize_path(buf);
         return;
     }
 
     Config cfg;
+    config_init(&cfg);
     if (config_load(&cfg) && strlen(cfg.target_dir) > 0) {
         snprintf(buf, buf_size, "%s", cfg.target_dir);
         config_free(&cfg);
+        normalize_path(buf);
         return;
     }
     config_free(&cfg);
 
     get_target_dir(buf, buf_size);
+    normalize_path(buf);
 }
