@@ -1,8 +1,9 @@
+
 # Dotfiles Stow Manager (`stow-manager`)
 
 **Usage**: `stow-manager [options] <command> [arguments]`
 
-High-performance ISO C17 dotfiles framework & Stow package manager. Auto-resolves package dependencies, mutual exclusion conflicts, directory symlink folding collisions, and multi-repository setups.
+High-performance dotfiles framework & Stow package manager made with C. Auto-resolves package dependencies, mutual exclusion conflicts, directory symlink folding collisions, and multi-repository setups.
 
 ## Global Options
 
@@ -60,3 +61,4 @@ High-performance ISO C17 dotfiles framework & Stow package manager. Auto-resolve
 
 - **Unstow & Delete Package**:
   `stow-manager pkg:remove hyprland`
+

@@ -23,13 +23,19 @@
 #include "scanner.h"
 #include "config.h"
 
-#if __has_include("help_text.h")
+#if __has_include("help_text.h") && __has_include("help_text_plain.h")
 #include "help_text.h"
+#include "help_text_plain.h"
 #else
-static const char *EMBEDDED_HELP =
+static const char *EMBEDDED_HELP_MD =
 "# Dotfiles Stow Manager (`stow-manager`)\n\n"
 "Usage: `stow-manager [options] <command> [arguments]`\n\n"
 "Run `make` to compile full help menu or pass `-h` / `--help`.\n";
+
+static const char *EMBEDDED_HELP_TXT =
+"Dotfiles Stow Manager (stow-manager)\n\n"
+"Usage: stow-manager [options] <command> [arguments]\n\n"
+"Run make to compile full help menu or pass -h / --help.\n";
 #endif
 
 static void render_inline_markdown(const char *text, bool is_tty) {
@@ -50,6 +56,17 @@ static void render_inline_markdown(const char *text, bool is_tty) {
                 }
             }
             p += 2;
+        } else if (*p == '*' && *(p + 1) != '*') {
+            if (is_tty) {
+                if (in_bold) {
+                    printf("%s", COLOR_RESET);
+                    in_bold = false;
+                } else {
+                    printf("%s%s", COLOR_BOLD, COLOR_WHITE);
+                    in_bold = true;
+                }
+            }
+            p++;
         } else if (*p == '`') {
             if (is_tty) {
                 if (in_code) {
@@ -98,10 +115,43 @@ static void render_markdown_line(char *line, bool is_tty) {
     }
 
     if (strncmp(line, "- ", 2) == 0) {
-        printf("  %s•%s ", COLOR_CYAN, COLOR_RESET);
-        render_inline_markdown(line + 2, true);
-        printf("\n");
-        return;
+        char *colon = strchr(line + 2, ':');
+        if (colon && *(colon - 1) == ' ') {
+            *colon = '\0';
+            const char *cmd_part = line + 2;
+            const char *desc_part = colon + 1;
+
+            printf("  %s•%s ", COLOR_CYAN, COLOR_RESET);
+            render_inline_markdown(cmd_part, true);
+
+            size_t visible_len = 0;
+            const char *p = cmd_part;
+            while (*p) {
+                if (strncmp(p, "**", 2) == 0) { p += 2; continue; }
+                if (*p == '`' || *p == '*') { p++; continue; }
+                visible_len++;
+                p++;
+            }
+
+            size_t target_col = 42;
+            if (visible_len + 4 < target_col) {
+                for (size_t i = visible_len + 4; i < target_col; i++) {
+                    putchar(' ');
+                }
+            } else {
+                printf(" ");
+            }
+
+            printf("%s:%s", COLOR_CYAN, COLOR_RESET);
+            render_inline_markdown(desc_part, true);
+            printf("\n");
+            return;
+        } else {
+            printf("  %s•%s ", COLOR_CYAN, COLOR_RESET);
+            render_inline_markdown(line + 2, true);
+            printf("\n");
+            return;
+        }
     }
 
     if (strncmp(line, "  ", 2) == 0 && line[2] != '\0' && line[2] != ' ') {
@@ -116,19 +166,23 @@ static void render_markdown_line(char *line, bool is_tty) {
 }
 
 static void show_help(void) {
+    bool is_tty = isatty(STDOUT_FILENO) != 0 && getenv("NO_COLOR") == NULL;
+
+    const char *help_filename = is_tty ? "help.md" : "help.txt";
+
     StringArray search_paths;
     str_array_init(&search_paths);
 
     char data_home[PATH_MAX];
     get_xdg_data_home(data_home, sizeof(data_home));
     char p1[PATH_MAX * 2];
-    snprintf(p1, sizeof(p1), "%s/stow-manager/help.md", data_home);
+    snprintf(p1, sizeof(p1), "%s/stow-manager/%s", data_home, help_filename);
     str_array_append(&search_paths, p1);
 
     char config_home[PATH_MAX];
     get_xdg_config_home(config_home, sizeof(config_home));
     char p2[PATH_MAX * 2];
-    snprintf(p2, sizeof(p2), "%s/stow-manager/help.md", config_home);
+    snprintf(p2, sizeof(p2), "%s/stow-manager/%s", config_home, help_filename);
     str_array_append(&search_paths, p2);
 
     StringArray data_dirs;
@@ -136,18 +190,20 @@ static void show_help(void) {
     get_xdg_data_dirs(&data_dirs);
     for (size_t i = 0; i < data_dirs.count; i++) {
         char path[PATH_MAX * 2];
-        snprintf(path, sizeof(path), "%s/stow-manager/help.md", data_dirs.items[i]);
+        snprintf(path, sizeof(path), "%s/stow-manager/%s", data_dirs.items[i], help_filename);
         str_array_append(&search_paths, path);
     }
     str_array_free(&data_dirs);
 
 #ifdef DATADIR
     char p3[PATH_MAX * 2];
-    snprintf(p3, sizeof(p3), "%s/stow-manager/help.md", DATADIR);
+    snprintf(p3, sizeof(p3), "%s/stow-manager/%s", DATADIR, help_filename);
     str_array_append(&search_paths, p3);
 #endif
 
-    str_array_append(&search_paths, "resources/help.md");
+    char p_res[PATH_MAX];
+    snprintf(p_res, sizeof(p_res), "resources/%s", help_filename);
+    str_array_append(&search_paths, p_res);
 
     FILE *fp = NULL;
     for (size_t i = 0; i < search_paths.count; i++) {
@@ -157,8 +213,6 @@ static void show_help(void) {
         }
     }
 
-    bool is_tty = isatty(STDOUT_FILENO) != 0;
-
     if (fp) {
         char line[1024];
         while (fgets(line, sizeof(line), fp)) {
@@ -166,7 +220,8 @@ static void show_help(void) {
         }
         fclose(fp);
     } else {
-        char *copy = strdup(EMBEDDED_HELP);
+        const char *fallback_str = is_tty ? EMBEDDED_HELP_MD : EMBEDDED_HELP_TXT;
+        char *copy = strdup(fallback_str);
         if (copy) {
             char *saveptr = NULL;
             char *token = strtok_r(copy, "\n", &saveptr);
