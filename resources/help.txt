@@ -8,7 +8,7 @@ GLOBAL OPTIONS:
   -d, --dotfiles-dir <path>       Set dotfiles repository directory for current command (e.g. -d ~/dotfiles)
   -t, --target-dir <path>         Set target home directory for current command (e.g. -t ~/)
   -y, --install                   Auto-confirm installation of missing required dependencies & optional plugins
-  -n, --dry-run                   Dry-run mode (preview disk changes without modifying disk)
+  -n, --dry-run                   Dry-run mode (preview disk changes, symlink creations & backups without modifying disk)
   -h, --help                      Display this help manual
 
 CONFIGURATION COMMANDS (config:*):
@@ -18,9 +18,9 @@ CONFIGURATION COMMANDS (config:*):
   config remove <path>            Remove a dotfiles repository directory from config
 
 PACKAGE MANAGEMENT COMMANDS (pkg:*):
-  pkg:create <name>              Scaffold a new Stow package directory & initialize .stowdeps manifest (alias: make:package)
-  pkg:remove <name ...>          Safely unstow and remove one or multiple Stow package directories (alias: remove:package)
-  pkg:list                       List all packages with status: [STOWED], [PARTIAL], or [UNSTOWED] (alias: list)
+  pkg:create <name>               Scaffold a new Stow package directory & initialize .stowdeps manifest (alias: make:package)
+  pkg:remove <name ...>           Safely unstow and remove one or multiple Stow package directories (alias: remove:package)
+  pkg:list                        List all packages with status: [STOWED], [PARTIAL], or [UNSTOWED] (alias: list)
 
 DEPENDENCY & MANIFEST COMMANDS (deps:*):
   deps:add <pkg> <dep> [--type]   Add dependency/conflict to .stowdeps (--required, --optional, --conflict)

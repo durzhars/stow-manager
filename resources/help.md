@@ -8,9 +8,9 @@ High-performance dotfiles framework & Stow package manager made with C. Auto-res
 
 - **`-d, --dotfiles-dir`** `<path>`       Set dotfiles repository directory for current command (e.g. `-d ~/dotfiles`)
 - **`-t, --target-dir`** `<path>`         Set target home directory for current command (e.g. `-t ~/`)
-- **`-y, --install`**                   Auto-confirm installation of missing required dependencies & optional plugins
-- **`-n, --dry-run`**                   Dry-run mode (preview disk changes, symlink creations & backups without modifying disk)
-- **`-h, --help`**                      Display this comprehensive help manual
+- **`-y, --install`**                    Auto-confirm installation of missing required dependencies & optional plugins
+- **`-n, --dry-run`**                    Dry-run mode (preview disk changes, symlink creations & backups without modifying disk)
+- **`-h, --help`**                       Display this comprehensive help manual
 
 ## Configuration Commands (`config:*`)
 
@@ -21,9 +21,9 @@ High-performance dotfiles framework & Stow package manager made with C. Auto-res
 
 ## Package Management Commands (`pkg:*`)
 
-- **`pkg:create`** `<name>`              Scaffold a new Stow package directory & initialize `.stowdeps` manifest (alias: `make:package`)
-- **`pkg:remove`** `<name ...>`          Safely unstow and remove one or multiple Stow package directories (alias: `remove:package`)
-- **`pkg:list`**                         List all packages with status: `[STOWED]`, `[PARTIAL]`, or `[UNSTOWED]` (alias: `list`)
+- **`pkg:create`** `<name>`                  Scaffold a new Stow package directory & initialize `.stowdeps` manifest (alias: `make:package`)
+- **`pkg:remove`** `<name ...>`              Safely unstow and remove one or multiple Stow package directories (alias: `remove:package`)
+- **`pkg:list`**                             List all packages with status: `[STOWED]`, `[PARTIAL]`, or `[UNSTOWED]` (alias: `list`)
 
 ## Dependency & Manifest Commands (`deps:*`)
 
