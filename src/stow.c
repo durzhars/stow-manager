@@ -43,6 +43,7 @@ static void unfold_symlink_cb(const char *symlink_path, void *user_data) {
                         }
                         closedir(tdir);
 
+                        unlink(symlink_path);
                         if (rename(tmp_dir, symlink_path) != 0) {
                             log_error("Failed to atomic rename unfolded directory '%s'", tmp_dir);
                         }
@@ -193,7 +194,12 @@ static void check_stowed_cb(const char *file_path, const char *rel_path, void *u
 
     if (is_symlink(target_path)) {
         char *link_dest = read_symlink_target(target_path);
-        if (link_dest && strcmp(link_dest, file_path) == 0) {
+        char real_file_path[PATH_MAX * 2];
+        if (realpath(file_path, real_file_path) == NULL) {
+            snprintf(real_file_path, sizeof(real_file_path), "%s", file_path);
+        }
+
+        if (link_dest && (strcmp(link_dest, file_path) == 0 || strcmp(link_dest, real_file_path) == 0 || is_path_prefix(link_dest, ctx->pkg_dir))) {
             ctx->is_stowed = true;
         }
         if (link_dest) free(link_dest);

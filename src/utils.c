@@ -333,13 +333,15 @@ void str_array_append(StringArray *arr, const char *str) {
         arr->items = new_items;
         arr->capacity = new_cap;
     }
-    arr->items[arr->count++] = strdup(str);
+    char *dup = strdup(str);
+    if (!dup) return;
+    arr->items[arr->count++] = dup;
 }
 
 bool str_array_contains(const StringArray *arr, const char *str) {
-    if (!arr || !str) return false;
+    if (!arr || !str || !arr->items) return false;
     for (size_t i = 0; i < arr->count; i++) {
-        if (strcmp(arr->items[i], str) == 0) return true;
+        if (arr->items[i] && strcmp(arr->items[i], str) == 0) return true;
     }
     return false;
 }
