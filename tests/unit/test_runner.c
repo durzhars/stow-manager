@@ -36,6 +36,8 @@ void test_escape_shell_arg(void);
 void test_expand_tilde_path(void);
 void test_is_path_prefix(void);
 void test_mkdir_p(void);
+void test_join_path(void);
+void test_symlink_helpers(void);
 
 /* Prototypes from test_manifest.c */
 void test_manifest_load_save(void);
@@ -57,6 +59,9 @@ void test_handle_mutual_exclusions(void);
 void test_unfold_directory_symlinks(void);
 void test_package_stow_status(void);
 
+/* Prototypes from test_scanner.c */
+void test_scan_package(void);
+
 /* Prototypes from test_registry.c */
 void test_registry_parsing(void);
 
@@ -74,6 +79,8 @@ int main(void) {
     RUN_TEST(test_expand_tilde_path);
     RUN_TEST(test_is_path_prefix);
     RUN_TEST(test_mkdir_p);
+    RUN_TEST(test_join_path);
+    RUN_TEST(test_symlink_helpers);
 
     // test_manifest.c
     RUN_TEST(test_manifest_load_save);
@@ -94,6 +101,9 @@ int main(void) {
     RUN_TEST(test_handle_mutual_exclusions);
     RUN_TEST(test_unfold_directory_symlinks);
     RUN_TEST(test_package_stow_status);
+
+    // test_scanner.c
+    RUN_TEST(test_scan_package);
 
     // test_registry.c
     RUN_TEST(test_registry_parsing);

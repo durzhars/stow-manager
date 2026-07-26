@@ -204,3 +204,44 @@ void test_mkdir_p(void) {
     snprintf(rm_cmd, sizeof(rm_cmd), "rm -rf \"%s\"", tmp_dir);
     (void)system(rm_cmd);
 }
+
+void test_join_path(void) {
+    char out[PATH_MAX];
+
+    join_path(out, sizeof(out), "/home/user/dotfiles", "hyprland");
+    ASSERT_STR_EQ(out, "/home/user/dotfiles/hyprland");
+
+    join_path(out, sizeof(out), "/home/user/dotfiles/", "hyprland");
+    ASSERT_STR_EQ(out, "/home/user/dotfiles/hyprland");
+
+    join_path(out, sizeof(out), "", "hyprland");
+    ASSERT_STR_EQ(out, "hyprland");
+}
+
+void test_symlink_helpers(void) {
+    char tmp_dir[] = "/tmp/stow_sym_hlp_XXXXXX";
+    ASSERT(mkdtemp(tmp_dir) != NULL, "Should create temporary directory for symlink helpers test");
+
+    char target_file[PATH_MAX];
+    snprintf(target_file, sizeof(target_file), "%s/target.txt", tmp_dir);
+    FILE *fp = fopen(target_file, "w");
+    if (fp) { fprintf(fp, "test\n"); fclose(fp); }
+
+    ASSERT(file_exists(target_file), "target_file should exist");
+    ASSERT(!is_symlink(target_file), "target_file should not be a symlink");
+    ASSERT(!is_dir(target_file), "target_file should not be a directory");
+
+    char link_file[PATH_MAX];
+    snprintf(link_file, sizeof(link_file), "%s/link.txt", tmp_dir);
+    ASSERT(symlink(target_file, link_file) == 0, "Should create symlink");
+
+    ASSERT(is_symlink(link_file), "link_file should be a symlink");
+    char *sym_target = read_symlink_target(link_file);
+    ASSERT(sym_target != NULL, "read_symlink_target should return target path");
+    ASSERT_STR_EQ(sym_target, target_file);
+    free(sym_target);
+
+    char rm_cmd[PATH_MAX * 2];
+    snprintf(rm_cmd, sizeof(rm_cmd), "rm -rf \"%s\"", tmp_dir);
+    (void)system(rm_cmd);
+}
