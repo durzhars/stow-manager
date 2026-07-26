@@ -115,43 +115,10 @@ static void render_markdown_line(char *line, bool is_tty) {
     }
 
     if (strncmp(line, "- ", 2) == 0) {
-        char *colon = strchr(line + 2, ':');
-        if (colon && *(colon - 1) == ' ') {
-            *colon = '\0';
-            const char *cmd_part = line + 2;
-            const char *desc_part = colon + 1;
-
-            printf("  %s•%s ", COLOR_CYAN, COLOR_RESET);
-            render_inline_markdown(cmd_part, true);
-
-            size_t visible_len = 0;
-            const char *p = cmd_part;
-            while (*p) {
-                if (strncmp(p, "**", 2) == 0) { p += 2; continue; }
-                if (*p == '`' || *p == '*') { p++; continue; }
-                visible_len++;
-                p++;
-            }
-
-            size_t target_col = 42;
-            if (visible_len + 4 < target_col) {
-                for (size_t i = visible_len + 4; i < target_col; i++) {
-                    putchar(' ');
-                }
-            } else {
-                printf(" ");
-            }
-
-            printf("%s:%s", COLOR_CYAN, COLOR_RESET);
-            render_inline_markdown(desc_part, true);
-            printf("\n");
-            return;
-        } else {
-            printf("  %s•%s ", COLOR_CYAN, COLOR_RESET);
-            render_inline_markdown(line + 2, true);
-            printf("\n");
-            return;
-        }
+        printf("  %s•%s ", COLOR_CYAN, COLOR_RESET);
+        render_inline_markdown(line + 2, true);
+        printf("\n");
+        return;
     }
 
     if (strncmp(line, "  ", 2) == 0 && line[2] != '\0' && line[2] != ' ') {
