@@ -43,7 +43,6 @@ static void unfold_symlink_cb(const char *symlink_path, void *user_data) {
                         }
                         closedir(tdir);
 
-                        unlink(symlink_path);
                         if (rename(tmp_dir, symlink_path) != 0) {
                             log_error("Failed to atomic rename unfolded directory '%s'", tmp_dir);
                         }
@@ -112,7 +111,12 @@ static void prepare_conflict_cb(const char *file_path, const char *rel_path, voi
 
     if (is_symlink(target_path)) {
         char *existing_target = read_symlink_target(target_path);
-        if (existing_target && strcmp(existing_target, file_path) == 0) {
+        char real_file_path[PATH_MAX * 2];
+        if (realpath(file_path, real_file_path) == NULL) {
+            snprintf(real_file_path, sizeof(real_file_path), "%s", file_path);
+        }
+
+        if (existing_target && (strcmp(existing_target, file_path) == 0 || strcmp(existing_target, real_file_path) == 0)) {
             ctx->unchanged_count++;
         } else {
             if (ctx->dry_run) {
