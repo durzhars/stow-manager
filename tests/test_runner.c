@@ -63,6 +63,34 @@ static void test_path_normalization(void) {
     ASSERT_STR_EQ(out, "/home/user/.config/nvim");
 }
 
+static void test_package_discovery(void) {
+    char tmp_dir[] = "/tmp/stow_pkgdisc_XXXXXX";
+    ASSERT(mkdtemp(tmp_dir) != NULL, "Should create temp dotfiles dir");
+
+    char p_bin[1024], p_scripts[1024], p_build[1024];
+    snprintf(p_bin, sizeof(p_bin), "%s/bin", tmp_dir);
+    snprintf(p_scripts, sizeof(p_scripts), "%s/scripts", tmp_dir);
+    snprintf(p_build, sizeof(p_build), "%s/build", tmp_dir);
+
+    mkdir_p(p_bin, 0755);
+    mkdir_p(p_scripts, 0755);
+    mkdir_p(p_build, 0755);
+
+    StringArray pkgs;
+    str_array_init(&pkgs);
+    get_all_packages(tmp_dir, &pkgs);
+
+    ASSERT(str_array_contains(&pkgs, "bin"), "Package 'bin' should be discovered");
+    ASSERT(str_array_contains(&pkgs, "scripts"), "Package 'scripts' should be discovered");
+    ASSERT(!str_array_contains(&pkgs, "build"), "Directory 'build' should be ignored");
+
+    str_array_free(&pkgs);
+
+    char cleanup_cmd[2048];
+    snprintf(cleanup_cmd, sizeof(cleanup_cmd), "rm -rf \"%s\"", tmp_dir);
+    system(cleanup_cmd);
+}
+
 static void test_string_array(void) {
     StringArray arr;
     str_array_init(&arr);
@@ -224,6 +252,7 @@ int main(void) {
     RUN_TEST(test_trim_whitespace);
     RUN_TEST(test_mkdir_p);
     RUN_TEST(test_path_normalization);
+    RUN_TEST(test_package_discovery);
     RUN_TEST(test_string_array);
     RUN_TEST(test_manifest_load_save);
     RUN_TEST(test_registry_parsing);
