@@ -136,3 +136,56 @@ void test_manifest_malformed_file(void) {
     snprintf(rm_cmd, sizeof(rm_cmd), "rm -rf \"%s\"", tmp_dir);
     (void)system(rm_cmd);
 }
+
+void test_manifest_edit_dep(void) {
+    char tmp_dir[] = "/tmp/stow_man_edt_XXXXXX";
+    ASSERT(mkdtemp(tmp_dir) != NULL, "Should create temporary directory for manifest edit test");
+
+    char pkg_dir[PATH_MAX];
+    snprintf(pkg_dir, sizeof(pkg_dir), "%s/editpkg", tmp_dir);
+    ASSERT(mkdir(pkg_dir, 0755) == 0, "Should create editpkg directory");
+
+    manifest_add_dep(tmp_dir, "editpkg", "bash", "--optional");
+
+    PackageManifest loaded;
+    manifest_init(&loaded, "editpkg");
+    ASSERT(manifest_load(&loaded, tmp_dir), "Manifest load should succeed");
+    ASSERT(str_array_contains(&loaded.optional, "bash"), "Should initially be optional");
+    manifest_free(&loaded);
+
+    manifest_edit_dep(tmp_dir, "editpkg", "bash", "--required");
+
+    manifest_init(&loaded, "editpkg");
+    ASSERT(manifest_load(&loaded, tmp_dir), "Manifest reload should succeed");
+    ASSERT(str_array_contains(&loaded.required, "bash"), "Should now be required");
+    ASSERT(!str_array_contains(&loaded.optional, "bash"), "Should no longer be optional");
+    manifest_free(&loaded);
+
+    char rm_cmd[PATH_MAX * 2];
+    snprintf(rm_cmd, sizeof(rm_cmd), "rm -rf \"%s\"", tmp_dir);
+    (void)system(rm_cmd);
+}
+
+void test_package_remove(void) {
+    char tmp_dotfiles[] = "/tmp/stow_pkg_rm_dot_XXXXXX";
+    char tmp_target[] = "/tmp/stow_pkg_rm_tgt_XXXXXX";
+    ASSERT(mkdtemp(tmp_dotfiles) != NULL, "Should create temporary dotfiles directory");
+    ASSERT(mkdtemp(tmp_target) != NULL, "Should create temporary target directory");
+
+    char pkg_dir[PATH_MAX];
+    snprintf(pkg_dir, sizeof(pkg_dir), "%s/rmpkg", tmp_dotfiles);
+    ASSERT(mkdir(pkg_dir, 0755) == 0, "Should create rmpkg directory");
+
+    char file1[PATH_MAX];
+    snprintf(file1, sizeof(file1), "%s/.file1", pkg_dir);
+    FILE *fp = fopen(file1, "w"); if (fp) { fprintf(fp, "content\n"); fclose(fp); }
+
+    ASSERT(is_dir(pkg_dir), "rmpkg directory should exist");
+
+    package_remove(tmp_dotfiles, tmp_target, "rmpkg", false);
+    ASSERT(!file_exists(pkg_dir), "rmpkg directory should be deleted after package_remove");
+
+    char rm_cmd[PATH_MAX * 4];
+    snprintf(rm_cmd, sizeof(rm_cmd), "rm -rf \"%s\" \"%s\"", tmp_dotfiles, tmp_target);
+    (void)system(rm_cmd);
+}

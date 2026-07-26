@@ -40,11 +40,24 @@ assert_file_contains "$LAST_CMD_OUTPUT" 'REQUIRED="bash"' "deps:show outputs REQ
 assert_file_contains "$LAST_CMD_OUTPUT" 'OPTIONAL="fzf"' "deps:show outputs OPTIONAL entries"
 assert_file_contains "$LAST_CMD_OUTPUT" 'CONFLICTS="zsh"' "deps:show outputs CONFLICTS entries"
 
-# 4. deps:remove <pkg> <dep>
-echo -e "\n${COLOR_BOLD}[Test 4] Remove dependency (deps:remove)${COLOR_RESET}"
-assert_success "$STOW_BIN deps:remove terminal bash" "stow-manager deps:remove terminal bash succeeded"
-assert_file_contains "$MANIFEST_FILE" 'REQUIRED=""' ".stowdeps manifest updated and REQUIRED is cleared"
-assert_file_not_contains "$MANIFEST_FILE" 'REQUIRED="bash"' ".stowdeps manifest no longer contains bash"
-assert_file_contains "$MANIFEST_FILE" 'OPTIONAL="fzf"' ".stowdeps manifest retains OPTIONAL entries"
+# 4. deps:edit <pkg> <dep> <new_type>
+echo -e "\n${COLOR_BOLD}[Test 4] Edit dependency type (deps:edit)${COLOR_RESET}"
+assert_success "$STOW_BIN deps:edit terminal fzf --required" "deps:edit terminal fzf --required succeeded"
+assert_file_contains "$MANIFEST_FILE" 'bash fzf' ".stowdeps manifest updated with REQUIRED containing 'bash fzf'"
+assert_file_contains "$MANIFEST_FILE" 'OPTIONAL=""' ".stowdeps manifest OPTIONAL is now empty"
+
+# 5. deps:remove <pkg> <dep>
+echo -e "\n${COLOR_BOLD}[Test 5] Remove dependency (deps:remove)${COLOR_RESET}"
+assert_success "$STOW_BIN deps:remove terminal fzf" "stow-manager deps:remove terminal fzf succeeded"
+assert_file_contains "$MANIFEST_FILE" 'REQUIRED="bash"' ".stowdeps manifest updated and REQUIRED retains bash"
+assert_file_not_contains "$MANIFEST_FILE" 'fzf' ".stowdeps manifest no longer contains fzf"
+
+# 6. pkg:create & pkg:remove
+echo -e "\n${COLOR_BOLD}[Test 6] Package CRUD operations (pkg:create & pkg:remove)${COLOR_RESET}"
+setup_sandbox
+assert_success "$STOW_BIN pkg:create mynewpkg" "stow-manager pkg:create mynewpkg succeeded"
+assert_path_exists "$STOW_DOTFILES_DIR/mynewpkg" "Created package directory exists"
+assert_success "$STOW_BIN pkg:remove mynewpkg" "stow-manager pkg:remove mynewpkg succeeded"
+assert_path_not_exists "$STOW_DOTFILES_DIR/mynewpkg" "Removed package directory no longer exists"
 
 print_summary

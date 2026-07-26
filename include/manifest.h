@@ -34,7 +34,10 @@ bool manifest_save(const PackageManifest *manifest, const char *dotfiles_dir);
 void manifest_free(PackageManifest *manifest);
 
 void manifest_add_dep(const char *dotfiles_dir, const char *pkg_name, const char *dep, const char *type);
+void manifest_edit_dep(const char *dotfiles_dir, const char *pkg_name, const char *dep, const char *new_type);
 void manifest_remove_dep(const char *dotfiles_dir, const char *pkg_name, const char *dep);
 void manifest_show(const char *dotfiles_dir, const char *pkg_name);
+
+void package_remove(const char *dotfiles_dir, const char *target_dir, const char *pkg_name, bool dry_run);
 
 #endif /* MANIFEST_H */

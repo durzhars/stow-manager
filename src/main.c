@@ -32,25 +32,28 @@ static const char *EMBEDDED_HELP =
 "- **`-y, --install`**             : Auto-confirm installation of missing dependencies/plugins\n"
 "- **`-n, --dry-run`**             : Dry-run mode (preview changes without modifying disk)\n"
 "- **`-h, --help`**                : Show this help menu\n\n"
-"## Configuration Commands\n\n"
+"## Configuration Commands (`config:*`)\n\n"
 "- **`config show`**                        : Display current configuration settings & paths\n"
 "- **`config set [dotfiles|target]`** `<path>` : Set primary dotfiles/target directory in config file\n"
 "- **`config add`** `<path>`                  : Add an additional dotfiles repository directory\n"
 "- **`config remove`** `<path>`               : Remove a dotfiles repository directory from config\n\n"
-"## Dependency Management Commands\n\n"
+"## Package Management Commands (`pkg:*`)\n\n"
+"- **`pkg:create`** `<name>`             : Scaffold a new Stow package directory & manifest (alias: `make:package`)\n"
+"- **`pkg:remove`** `<name>`             : Unstow and remove a Stow package directory (alias: `remove:package`)\n"
+"- **`pkg:list`**                       : List all packages and stowed status (alias: `list`)\n\n"
+"## Dependency Management Commands (`deps:*`)\n\n"
 "- **`deps:add`** `<pkg> <dep> [--opt]`   : Add a dependency/conflict to package manifest\n"
+"- **`deps:edit`** `<pkg> <dep> <type>`   : Edit dependency type (`--required`, `--optional`, `--conflict`)\n"
 "- **`deps:remove`** `<pkg> <dep>`        : Remove a dependency from package manifest\n"
-"- **`deps:show`** `<pkg>`               : Display package manifest contents\n"
-"- **`make:package`** `<name>`            : Scaffold a new Stow package directory & manifest\n\n"
-"## Package & Stow Operations\n\n"
-"- **`check`** `[pkg ...]`                : Detect missing dependencies, plugins & broken symlinks\n"
-"- **`check-symlinks`**                 : Scan for broken repo symlinks & unmanaged target symlinks\n"
-"- **`diff`** `[pkg ...]`                 : Preview symlink creations, conflict backups, and missing deps\n"
-"- **`scan`** `[pkg ...]`                 : Recursively scan package files to auto-detect dependencies\n"
-"- **`list`**                           : List all packages and stowed status\n"
+"- **`deps:show`** `<pkg>`               : Display package manifest contents\n\n"
+"## Stow & Deployment Commands\n\n"
 "- **`stow`** `<pkg ...>`                 : Stow one or multiple packages with auto conflict resolution\n"
 "- **`unstow`** `<pkg ...>`               : Unstow one or multiple packages\n"
 "- **`restow`** `<pkg ...>`               : Restow one or multiple packages\n"
+"- **`diff`** `[pkg ...]`                 : Preview symlink creations, conflict backups, and missing deps\n"
+"- **`check`** `[pkg ...]`                : Detect missing dependencies, plugins & broken symlinks\n"
+"- **`check-symlinks`**                 : Scan for broken repo symlinks & unmanaged target symlinks\n"
+"- **`scan`** `[pkg ...]`                 : Recursively scan package files to auto-detect dependencies\n"
 "- **`fix-conflicts`**                  : Unfold directory symlinks & resolve conflicts\n"
 "- **`all`**                            : Stow all packages\n"
 "- **`help`**                           : Show this help menu\n";
@@ -387,6 +390,14 @@ int main(int argc, char **argv) {
         const char *dep = args.items[2];
         const char *type = (args.count > 3) ? args.items[3] : "--optional";
         manifest_add_dep(dotfiles_dir, pkg, dep, type);
+    } else if (strcmp(cmd, "deps:edit") == 0 || strcmp(cmd, "deps:set") == 0) {
+        if (args.count < 4) {
+            log_error("Usage: stow-manager deps:edit <package> <dependency> <new_type>");
+            log_info("Available types: --required, --optional, --conflict (or required, optional, conflict)");
+            str_array_free(&args);
+            return 1;
+        }
+        manifest_edit_dep(dotfiles_dir, args.items[1], args.items[2], args.items[3]);
     } else if (strcmp(cmd, "deps:remove") == 0 || strcmp(cmd, "deps:rm") == 0) {
         if (args.count < 3) {
             log_error("Usage: stow-manager deps:remove <package> <dependency>");
@@ -401,9 +412,9 @@ int main(int argc, char **argv) {
             return 1;
         }
         manifest_show(dotfiles_dir, args.items[1]);
-    } else if (strcmp(cmd, "make:package") == 0 || strcmp(cmd, "make:pkg") == 0) {
+    } else if (strcmp(cmd, "pkg:create") == 0 || strcmp(cmd, "package:create") == 0 || strcmp(cmd, "make:package") == 0 || strcmp(cmd, "make:pkg") == 0) {
         if (args.count < 2) {
-            log_error("Usage: stow-manager make:package <package_name>");
+            log_error("Usage: stow-manager pkg:create <package_name>");
             str_array_free(&args);
             return 1;
         }
@@ -413,6 +424,17 @@ int main(int argc, char **argv) {
         manifest_save(&manifest, dotfiles_dir);
         log_success("Created package directory & manifest for '%s'.", pkg);
         manifest_free(&manifest);
+    } else if (strcmp(cmd, "pkg:remove") == 0 || strcmp(cmd, "package:remove") == 0 || strcmp(cmd, "remove:package") == 0 || strcmp(cmd, "pkg:rm") == 0 || strcmp(cmd, "package:rm") == 0) {
+        if (args.count < 2) {
+            log_error("Usage: stow-manager pkg:remove <package_name>");
+            str_array_free(&args);
+            return 1;
+        }
+        for (size_t i = 1; i < args.count; i++) {
+            package_remove(dotfiles_dir, target_dir, args.items[i], dry_run);
+        }
+    } else if (strcmp(cmd, "pkg:list") == 0 || strcmp(cmd, "package:list") == 0 || strcmp(cmd, "list") == 0) {
+        list_packages_status(dotfiles_dir, target_dir);
     } else if (strcmp(cmd, "check") == 0) {
         if (args.count > 1) {
             for (size_t i = 1; i < args.count; i++) {

@@ -41,6 +41,8 @@ void test_mkdir_p(void);
 void test_manifest_load_save(void);
 void test_manifest_add_and_remove_dep(void);
 void test_manifest_malformed_file(void);
+void test_manifest_edit_dep(void);
+void test_package_remove(void);
 
 /* Prototypes from test_config.c */
 void test_config_system(void);
@@ -77,6 +79,8 @@ int main(void) {
     RUN_TEST(test_manifest_load_save);
     RUN_TEST(test_manifest_add_and_remove_dep);
     RUN_TEST(test_manifest_malformed_file);
+    RUN_TEST(test_manifest_edit_dep);
+    RUN_TEST(test_package_remove);
 
     // test_config.c
     RUN_TEST(test_config_system);
