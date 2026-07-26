@@ -1,6 +1,13 @@
 #ifndef UTILS_H
 #define UTILS_H
 
+#ifndef _XOPEN_SOURCE
+#define _XOPEN_SOURCE 700
+#endif
+#ifndef _DEFAULT_SOURCE
+#define _DEFAULT_SOURCE
+#endif
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -32,6 +39,7 @@ void join_path(char *out, size_t out_size, const char *dir, const char *rel);
 int mkdir_p(const char *path, mode_t mode);
 bool is_path_prefix(const char *path, const char *prefix);
 void escape_shell_arg(const char *src, char *dest, size_t dest_size);
+void expand_tilde_path(const char *path, char *out, size_t out_size);
 
 typedef struct {
     char **items;

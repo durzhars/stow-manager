@@ -79,6 +79,26 @@ char *read_symlink_target(const char *path) {
     ssize_t len = readlink(path, target, sizeof(target) - 1);
     if (len != -1) {
         target[len] = '\0';
+        if (target[0] != '/') {
+            char parent_dir[PATH_MAX];
+            snprintf(parent_dir, sizeof(parent_dir), "%s", path);
+            char *last_slash = strrchr(parent_dir, '/');
+            if (last_slash) {
+                *last_slash = '\0';
+            } else {
+                snprintf(parent_dir, sizeof(parent_dir), ".");
+            }
+
+            char abs_target[PATH_MAX];
+            join_path(abs_target, sizeof(abs_target), parent_dir, target);
+
+            char real_abs[PATH_MAX];
+            if (realpath(abs_target, real_abs) != NULL) {
+                return strdup(real_abs);
+            }
+            normalize_path(abs_target);
+            return strdup(abs_target);
+        }
         return strdup(target);
     }
     return NULL;
@@ -186,6 +206,21 @@ void escape_shell_arg(const char *src, char *dest, size_t dest_size) {
     dest[di] = '\0';
 }
 
+void expand_tilde_path(const char *path, char *out, size_t out_size) {
+    if (!path || !out || out_size == 0) return;
+
+    if (path[0] == '~' && (path[1] == '/' || path[1] == '\0')) {
+        const char *home = getenv("HOME");
+        if (home && strlen(home) > 0) {
+            snprintf(out, out_size, "%s%s", home, path + 1);
+            normalize_path(out);
+            return;
+        }
+    }
+    snprintf(out, out_size, "%s", path);
+    normalize_path(out);
+}
+
 void str_array_init(StringArray *arr) {
     arr->items = NULL;
     arr->count = 0;
@@ -278,8 +313,8 @@ void get_all_packages(const char *dotfiles_dir, StringArray *packages) {
     struct dirent *entry;
     while ((entry = readdir(dir)) != NULL) {
         const char *name = entry->d_name;
-        if (name[0] == '.') continue;
-        if (strcmp(name, "build") == 0) continue;
+        if (strcmp(name, ".") == 0 || strcmp(name, "..") == 0 || strcmp(name, ".git") == 0) continue;
+        if (strcmp(name, "build") == 0 && !file_exists(ignore_file)) continue;
         if (str_array_contains(&ignored, name)) continue;
 
         char path[PATH_MAX * 2];

@@ -127,7 +127,9 @@ bool is_tool_installed_dynamic(const char *dotfiles_dir, const char *tool) {
         const char *entry = aliases.items[i];
         if (strncmp(entry, "plugin:", 7) == 0) {
             const char *plugin_path = entry + 7;
-            if (access(plugin_path, R_OK) == 0) {
+            char expanded[PATH_MAX];
+            expand_tilde_path(plugin_path, expanded, sizeof(expanded));
+            if (access(expanded, R_OK) == 0) {
                 installed = true;
                 break;
             }
