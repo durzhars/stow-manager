@@ -540,25 +540,80 @@ void get_target_dir(char *buf, size_t buf_size) {
     }
 }
 
+static bool is_entry_ignored(const char *name, const StringArray *ignore_patterns) {
+    if (!name) return true;
+    if (strcmp(name, ".") == 0 || strcmp(name, "..") == 0 || strcmp(name, ".git") == 0) {
+        return true;
+    }
+    if (name[0] == '.') {
+        return true;
+    }
+
+    if (!ignore_patterns) return false;
+
+    for (size_t i = 0; i < ignore_patterns->count; i++) {
+        const char *pat = ignore_patterns->items[i];
+        if (strcmp(name, pat) == 0) return true;
+
+        char unescaped[256];
+        size_t u = 0;
+        for (size_t k = 0; pat[k] != '\0' && u + 1 < sizeof(unescaped); k++) {
+            if (pat[k] == '\\' && pat[k + 1] != '\0') {
+                k++;
+            }
+            if (pat[k] == '.' && pat[k + 1] == '*') {
+                unescaped[u++] = '*';
+                k++;
+            } else {
+                unescaped[u++] = pat[k];
+            }
+        }
+        unescaped[u] = '\0';
+
+        if (strcmp(name, unescaped) == 0) return true;
+    }
+    return false;
+}
+
 void get_all_packages(const char *dotfiles_dir, StringArray *packages) {
     DIR *dir = opendir(dotfiles_dir);
     if (!dir) return;
 
+    StringArray ignore_patterns;
+    str_array_init(&ignore_patterns);
+
+    char ignore_file[PATH_MAX * 2];
+    join_path(ignore_file, sizeof(ignore_file), dotfiles_dir, ".stowignore");
+    FILE *fp = fopen(ignore_file, "r");
+    if (fp) {
+        char *linebuf = NULL;
+        size_t linecap = 0;
+        ssize_t linelen;
+        while ((linelen = getline(&linebuf, &linecap, fp)) != -1) {
+            (void)linelen;
+            char *trimmed = trim_whitespace(linebuf);
+            if (trimmed[0] == '#' || trimmed[0] == '\0') continue;
+            if (!str_array_contains(&ignore_patterns, trimmed)) {
+                str_array_append(&ignore_patterns, trimmed);
+            }
+        }
+        free(linebuf);
+        fclose(fp);
+    }
+
     struct dirent *entry;
     while ((entry = readdir(dir)) != NULL) {
         const char *name = entry->d_name;
-        if (strcmp(name, ".") != 0 && strcmp(name, "..") != 0 &&
-            strcmp(name, ".git") != 0 && strcmp(name, "scratch") != 0 &&
-            strcmp(name, "scripts") != 0 && strcmp(name, "src") != 0 &&
-            strcmp(name, "include") != 0 && strcmp(name, "build") != 0 &&
-            strcmp(name, "bin") != 0 && strcmp(name, "tests") != 0) {
+        if (!is_entry_ignored(name, &ignore_patterns)) {
             char path[PATH_MAX * 2];
-            snprintf(path, sizeof(path), "%s/%s", dotfiles_dir, name);
+            join_path(path, sizeof(path), dotfiles_dir, name);
             if (is_dir(path)) {
                 str_array_append(packages, name);
             }
         }
     }
+
+    str_array_free(&ignore_patterns);
     closedir(dir);
 }
 

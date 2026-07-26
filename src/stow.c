@@ -134,6 +134,7 @@ void unfold_directory_symlinks(const char *target_dir, const char *dotfiles_dir,
 typedef struct {
     const char *target_dir;
     const char *pkg_dir;
+    const char *real_pkg_dir;
     bool dry_run;
     size_t new_links;
     size_t replaced_links;
@@ -151,9 +152,12 @@ static void prepare_conflict_cb(const char *file_path, const char *rel_path, voi
     char pkg_file_path[PATH_MAX * 2];
     join_path(pkg_file_path, sizeof(pkg_file_path), ctx->pkg_dir, rel_path);
 
+    char real_pkg_file_path[PATH_MAX * 2];
+    join_path(real_pkg_file_path, sizeof(real_pkg_file_path), ctx->real_pkg_dir, rel_path);
+
     if (is_symlink(target_path)) {
         char *target = read_symlink_target(target_path);
-        if (target && strcmp(target, pkg_file_path) == 0) {
+        if (target && (strcmp(target, pkg_file_path) == 0 || strcmp(target, real_pkg_file_path) == 0)) {
             ctx->unchanged++;
         } else {
             if (ctx->dry_run) {
@@ -198,11 +202,16 @@ void prepare_target_conflicts(const char *target_dir, const char *dotfiles_dir, 
     char pkg_dir[PATH_MAX * 2];
     join_path(pkg_dir, sizeof(pkg_dir), dotfiles_dir, pkg_name);
 
+    char real_pkg_dir[PATH_MAX * 2];
+    if (realpath(pkg_dir, real_pkg_dir) == NULL) {
+        snprintf(real_pkg_dir, sizeof(real_pkg_dir), "%s", pkg_dir);
+    }
+
     if (dry_run) {
         log_info("[DRY-RUN] Previewing target paths & conflicts for package '%s'...", pkg_name);
     }
 
-    ConflictContext ctx = { target_dir, pkg_dir, dry_run, 0, 0, 0, 0 };
+    ConflictContext ctx = { target_dir, pkg_dir, real_pkg_dir, dry_run, 0, 0, 0, 0 };
     walk_dir_files(pkg_dir, "", prepare_conflict_cb, &ctx);
 
     if (dry_run) {
@@ -214,6 +223,7 @@ void prepare_target_conflicts(const char *target_dir, const char *dotfiles_dir, 
 typedef struct {
     const char *target_dir;
     const char *pkg_dir;
+    const char *real_pkg_dir;
     bool is_stowed;
 } CheckStowedContext;
 
@@ -228,9 +238,12 @@ static void check_stowed_cb(const char *file_path, const char *rel_path, void *u
     char pkg_file_path[PATH_MAX * 2];
     join_path(pkg_file_path, sizeof(pkg_file_path), ctx->pkg_dir, rel_path);
 
+    char real_pkg_file_path[PATH_MAX * 2];
+    join_path(real_pkg_file_path, sizeof(real_pkg_file_path), ctx->real_pkg_dir, rel_path);
+
     if (is_symlink(target_path)) {
         char *target = read_symlink_target(target_path);
-        if (!target || strcmp(target, pkg_file_path) != 0) {
+        if (!target || (strcmp(target, pkg_file_path) != 0 && strcmp(target, real_pkg_file_path) != 0)) {
             ctx->is_stowed = false;
         }
         if (target) free(target);
@@ -243,7 +256,12 @@ bool is_package_stowed(const char *target_dir, const char *dotfiles_dir, const c
     char pkg_dir[PATH_MAX * 2];
     join_path(pkg_dir, sizeof(pkg_dir), dotfiles_dir, pkg_name);
 
-    CheckStowedContext ctx = { target_dir, pkg_dir, true };
+    char real_pkg_dir[PATH_MAX * 2];
+    if (realpath(pkg_dir, real_pkg_dir) == NULL) {
+        snprintf(real_pkg_dir, sizeof(real_pkg_dir), "%s", pkg_dir);
+    }
+
+    CheckStowedContext ctx = { target_dir, pkg_dir, real_pkg_dir, true };
     walk_dir_files(pkg_dir, "", check_stowed_cb, &ctx);
     return ctx.is_stowed;
 }
