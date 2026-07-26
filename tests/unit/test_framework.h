@@ -28,8 +28,8 @@
 #define TEST_RED   "\033[0;31m"
 #define TEST_RESET "\033[0m"
 
-static int g_tests_run = 0;
-static int g_tests_failed = 0;
+extern int g_tests_run;
+extern int g_tests_failed;
 
 #define ASSERT(expr, msg) do { \
     if (!(expr)) { \

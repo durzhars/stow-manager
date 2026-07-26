@@ -1,0 +1,206 @@
+/*
+ * Dotfiles Stow Manager (stow-manager)
+ * Copyright (C) 2026 durzhars
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program. If not, see <https://www.gnu.org/licenses/>.
+ */
+
+#define _GNU_SOURCE
+#define _DEFAULT_SOURCE
+#define _POSIX_C_SOURCE 200809L
+
+#include "test_framework.h"
+#include "../include/utils.h"
+
+void test_trim_whitespace(void) {
+    char s1[] = "  hello world  ";
+    ASSERT_STR_EQ(trim_whitespace(s1), "hello world");
+
+    char s2[] = "\"quoted string\"";
+    ASSERT_STR_EQ(trim_whitespace(s2), "quoted string");
+
+    char s3[] = "\t\n  ";
+    ASSERT_STR_EQ(trim_whitespace(s3), "");
+}
+
+void test_string_array(void) {
+    StringArray arr;
+    str_array_init(&arr);
+
+    ASSERT(arr.count == 0, "Array count should initially be 0");
+    str_array_append(&arr, "item1");
+    str_array_append(&arr, "item2");
+
+    ASSERT(arr.count == 2, "Array count should be 2");
+    ASSERT(str_array_contains(&arr, "item1"), "Array should contain 'item1'");
+    ASSERT(str_array_contains(&arr, "item2"), "Array should contain 'item2'");
+    ASSERT(!str_array_contains(&arr, "item3"), "Array should not contain 'item3'");
+
+    str_array_free(&arr);
+    ASSERT(arr.count == 0, "Array count should be 0 after free");
+}
+
+void test_xdg_paths(void) {
+    char cfg_home[PATH_MAX];
+    get_xdg_config_home(cfg_home, sizeof(cfg_home));
+    ASSERT(strlen(cfg_home) > 0, "XDG_CONFIG_HOME should not be empty");
+
+    char data_home[PATH_MAX];
+    get_xdg_data_home(data_home, sizeof(data_home));
+    ASSERT(strlen(data_home) > 0, "XDG_DATA_HOME should not be empty");
+
+    StringArray data_dirs;
+    str_array_init(&data_dirs);
+    get_xdg_data_dirs(&data_dirs);
+    ASSERT(data_dirs.count > 0, "XDG_DATA_DIRS should yield at least 1 directory");
+    str_array_free(&data_dirs);
+}
+
+void test_safe_allocators(void) {
+    char *ptr = safe_malloc(100);
+    ASSERT(ptr != NULL, "safe_malloc should return non-null pointer");
+    strcpy(ptr, "testing safe_malloc");
+    ASSERT_STR_EQ(ptr, "testing safe_malloc");
+
+    char *dup = safe_strdup(ptr);
+    ASSERT(dup != NULL, "safe_strdup should return non-null pointer");
+    ASSERT_STR_EQ(dup, "testing safe_malloc");
+
+    free(ptr);
+    free(dup);
+}
+
+void test_normalize_path(void) {
+    // Collapsing duplicate slashes
+    char p1[PATH_MAX] = "///home//user///.config";
+    normalize_path(p1);
+    ASSERT_STR_EQ(p1, "/home/user/.config");
+
+    // Stripping trailing slashes on non-root paths
+    char p2[PATH_MAX] = "/var/log/";
+    normalize_path(p2);
+    ASSERT_STR_EQ(p2, "/var/log");
+
+    // Preserving single root slash
+    char p3[PATH_MAX] = "/";
+    normalize_path(p3);
+    ASSERT_STR_EQ(p3, "/");
+
+    // Collapsing multiple root slashes to a single root slash
+    char p4[PATH_MAX] = "///";
+    normalize_path(p4);
+    ASSERT_STR_EQ(p4, "/");
+}
+
+void test_collapse_path(void) {
+    // Resolving .. relative path segments
+    char p1[PATH_MAX] = "/a/b/../c";
+    collapse_path(p1);
+    ASSERT_STR_EQ(p1, "/a/c");
+
+    // Resolving . relative path segments
+    char p2[PATH_MAX] = "/a/b/./c";
+    collapse_path(p2);
+    ASSERT_STR_EQ(p2, "/a/b/c");
+
+    // Multiple relative segments
+    char p3[PATH_MAX] = "/a/b/c/../../d";
+    collapse_path(p3);
+    ASSERT_STR_EQ(p3, "/a/d");
+
+    // Complex sequence with dot and dot-dot
+    char p4[PATH_MAX] = "/a/./b/../c";
+    collapse_path(p4);
+    ASSERT_STR_EQ(p4, "/a/c");
+}
+
+void test_escape_shell_arg(void) {
+    char dest[256];
+
+    // Simple single-word argument wrapping
+    escape_shell_arg("foo", dest, sizeof(dest));
+    ASSERT_STR_EQ(dest, "'foo'");
+
+    // Escaping embedded single quotes
+    escape_shell_arg("it's", dest, sizeof(dest));
+    ASSERT_STR_EQ(dest, "'it'\\''s'");
+
+    // Empty string handling
+    escape_shell_arg("", dest, sizeof(dest));
+    ASSERT_STR_EQ(dest, "''");
+
+    // Buffer boundary limits
+    char small_buf[5];
+    escape_shell_arg("hello", small_buf, sizeof(small_buf));
+    ASSERT(strlen(small_buf) < sizeof(small_buf), "Buffer must be null-terminated and not overrun");
+}
+
+void test_expand_tilde_path(void) {
+    char out[PATH_MAX];
+    const char *home = getenv("HOME");
+    ASSERT(home != NULL, "HOME environment variable should be set");
+
+    // Replacing leading ~/ with $HOME
+    expand_tilde_path("~/config", out, sizeof(out));
+    char expected[PATH_MAX];
+    snprintf(expected, sizeof(expected), "%s/config", home);
+    ASSERT_STR_EQ(out, expected);
+
+    // Replacing leading ~ with $HOME
+    expand_tilde_path("~", out, sizeof(out));
+    ASSERT_STR_EQ(out, home);
+
+    // Non-tilde paths remaining untouched
+    expand_tilde_path("/var/log", out, sizeof(out));
+    ASSERT_STR_EQ(out, "/var/log");
+
+    expand_tilde_path("relative/path", out, sizeof(out));
+    ASSERT_STR_EQ(out, "relative/path");
+}
+
+void test_is_path_prefix(void) {
+    // True prefix matches
+    ASSERT(is_path_prefix("/home/user/dotfiles/bash", "/home/user/dotfiles"),
+           "/home/user/dotfiles should be a prefix of /home/user/dotfiles/bash");
+
+    ASSERT(is_path_prefix("/home/user/dotfiles", "/home/user/dotfiles"),
+           "Identical path should be a valid prefix of itself");
+
+    // False positive boundaries
+    ASSERT(!is_path_prefix("/home/user/dotfiles-other", "/home/user/dotfiles"),
+           "/home/user/dotfiles should NOT be a prefix of /home/user/dotfiles-other");
+
+    ASSERT(!is_path_prefix("/etc/passwd", "/home/user"),
+           "/home/user should NOT be a prefix of /etc/passwd");
+}
+
+void test_mkdir_p(void) {
+    char tmp_dir[] = "/tmp/stow_mkdir_XXXXXX";
+    ASSERT(mkdtemp(tmp_dir) != NULL, "Should create temporary directory for mkdir_p test");
+
+    // Recursively create deeply nested directory
+    char deep_path[PATH_MAX];
+    snprintf(deep_path, sizeof(deep_path), "%s/a/b/c/d", tmp_dir);
+    int res = mkdir_p(deep_path, 0755);
+    ASSERT(res == 0, "mkdir_p should return 0 on success");
+    ASSERT(is_dir(deep_path), "Deeply nested directory should exist");
+
+    // Handle existing directory paths gracefully without returning an error
+    int res_existing = mkdir_p(deep_path, 0755);
+    ASSERT(res_existing == 0, "mkdir_p on existing directory should return 0");
+
+    char rm_cmd[PATH_MAX * 2];
+    snprintf(rm_cmd, sizeof(rm_cmd), "rm -rf \"%s\"", tmp_dir);
+    (void)system(rm_cmd);
+}

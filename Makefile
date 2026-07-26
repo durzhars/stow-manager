@@ -16,6 +16,8 @@ INC_DIR = include
 BUILD_DIR = build
 BIN_DIR = bin
 TEST_DIR = tests
+TEST_UNIT_DIR = $(TEST_DIR)/unit
+TEST_FEATURE_DIR = $(TEST_DIR)/feature
 
 SRCS = $(SRC_DIR)/main.c \
        $(SRC_DIR)/logger.c \
@@ -30,12 +32,12 @@ SRCS = $(SRC_DIR)/main.c \
 OBJS = $(patsubst $(SRC_DIR)/%.c,$(BUILD_DIR)/%.o,$(SRCS))
 TARGET = $(BIN_DIR)/stow-manager
 
-TEST_SRCS = $(TEST_DIR)/test_runner.c
-TEST_OBJS = $(BUILD_DIR)/test_runner.o \
+TEST_SRCS = $(wildcard $(TEST_UNIT_DIR)/*.c)
+TEST_OBJS = $(patsubst $(TEST_UNIT_DIR)/%.c,$(BUILD_DIR)/%.o,$(TEST_SRCS)) \
             $(filter-out $(BUILD_DIR)/main.o,$(OBJS))
 TEST_TARGET = $(BIN_DIR)/test_runner
 
-.PHONY: all clean static install test uninstall
+.PHONY: all clean static install test test-feature uninstall
 
 all: $(TARGET)
 
@@ -48,14 +50,17 @@ static: $(TARGET)
 test: $(TEST_TARGET)
 	./$(TEST_TARGET)
 
+test-feature: $(TARGET)
+	bash $(TEST_FEATURE_DIR)/run_feature_tests.sh
+
 $(TEST_TARGET): $(TEST_OBJS) | $(BIN_DIR)
 	$(CC) $(CFLAGS) $(TEST_OBJS) -o $(TEST_TARGET) $(LDFLAGS)
 
 $(BUILD_DIR)/%.o: $(SRC_DIR)/%.c | $(BUILD_DIR)
 	$(CC) $(CFLAGS) -c $< -o $@
 
-$(BUILD_DIR)/test_runner.o: $(TEST_DIR)/test_runner.c | $(BUILD_DIR)
-	$(CC) $(CFLAGS) -Itests -c $< -o $@
+$(BUILD_DIR)/%.o: $(TEST_UNIT_DIR)/%.c | $(BUILD_DIR)
+	$(CC) $(CFLAGS) -I$(TEST_UNIT_DIR) -c $< -o $@
 
 $(BUILD_DIR):
 	mkdir -p $(BUILD_DIR)
