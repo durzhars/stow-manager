@@ -88,6 +88,47 @@ static void render_inline_markdown(const char *text, bool is_tty) {
     }
 }
 
+static size_t get_visible_length(const char *text) {
+    if (!text) return 0;
+    size_t len = 0;
+    const char *p = text;
+    while (*p) {
+        if (strncmp(p, "**", 2) == 0) {
+            p += 2;
+        } else if (*p == '*' || *p == '`') {
+            p++;
+        } else {
+            len++;
+            p++;
+        }
+    }
+    return len;
+}
+
+static bool split_bullet_line(const char *content, char *label_buf, size_t label_sz, const char **desc_out) {
+    const char *sep = strstr(content, "  ");
+    const char *colon_sep = strstr(content, " : ");
+    if (colon_sep && (!sep || colon_sep < sep)) {
+        sep = colon_sep;
+    }
+
+    if (!sep) {
+        return false;
+    }
+
+    size_t label_len = (size_t)(sep - content);
+    if (label_len >= label_sz) label_len = label_sz - 1;
+
+    strncpy(label_buf, content, label_len);
+    label_buf[label_len] = '\0';
+
+    while (*sep == ' ' || *sep == ':') {
+        sep++;
+    }
+    *desc_out = sep;
+    return true;
+}
+
 static void render_markdown_line(char *line, bool is_tty) {
     size_t len = strlen(line);
     if (len > 0 && line[len - 1] == '\n') {
@@ -115,10 +156,34 @@ static void render_markdown_line(char *line, bool is_tty) {
     }
 
     if (strncmp(line, "- ", 2) == 0) {
-        printf("  %s•%s ", COLOR_CYAN, COLOR_RESET);
-        render_inline_markdown(line + 2, true);
-        printf("\n");
-        return;
+        char label_buf[512];
+        const char *desc_ptr = NULL;
+
+        if (split_bullet_line(line + 2, label_buf, sizeof(label_buf), &desc_ptr) && *desc_ptr != '\0') {
+            printf("  %s•%s ", COLOR_CYAN, COLOR_RESET);
+            render_inline_markdown(label_buf, true);
+
+            size_t vis_len = get_visible_length(label_buf);
+            size_t target_col = 38;
+
+            if (vis_len < target_col) {
+                size_t pad = target_col - vis_len;
+                for (size_t k = 0; k < pad; k++) {
+                    putchar(' ');
+                }
+            } else {
+                putchar(' ');
+            }
+
+            render_inline_markdown(desc_ptr, true);
+            printf("\n");
+            return;
+        } else {
+            printf("  %s•%s ", COLOR_CYAN, COLOR_RESET);
+            render_inline_markdown(line + 2, true);
+            printf("\n");
+            return;
+        }
     }
 
     if (strncmp(line, "  ", 2) == 0 && line[2] != '\0' && line[2] != ' ') {
