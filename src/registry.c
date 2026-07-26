@@ -21,10 +21,13 @@ void registry_get_aliases(const char *dotfiles_dir, const char *tool, StringArra
         return;
     }
 
-    char line[1024];
+    char *linebuf = NULL;
+    size_t linecap = 0;
+    ssize_t linelen;
     bool found = false;
-    while (fgets(line, sizeof(line), fp)) {
-        char *trimmed = trim_whitespace(line);
+
+    while ((linelen = getline(&linebuf, &linecap, fp)) != -1) {
+        char *trimmed = trim_whitespace(linebuf);
         if (trimmed[0] == '#' || trimmed[0] == '\0') continue;
 
         char *eq = strchr(trimmed, '=');
@@ -35,18 +38,20 @@ void registry_get_aliases(const char *dotfiles_dir, const char *tool, StringArra
 
             if (strcmp(key, tool) == 0) {
                 found = true;
-                char *token = strtok(val, "|");
+                char *saveptr = NULL;
+                char *token = strtok_r(val, "|", &saveptr);
                 while (token) {
                     char *alias = trim_whitespace(token);
                     if (strlen(alias) > 0) {
                         str_array_append(aliases, alias);
                     }
-                    token = strtok(NULL, "|");
+                    token = strtok_r(NULL, "|", &saveptr);
                 }
                 break;
             }
         }
     }
+    free(linebuf);
     fclose(fp);
 
     if (!found || aliases->count == 0) {
@@ -63,9 +68,12 @@ void registry_get_distro_pkg(const char *dotfiles_dir, const char *tool, const c
     char target_key[256];
     snprintf(target_key, sizeof(target_key), "%s@%s", tool, distro);
 
-    char line[1024];
-    while (fgets(line, sizeof(line), fp)) {
-        char *trimmed = trim_whitespace(line);
+    char *linebuf = NULL;
+    size_t linecap = 0;
+    ssize_t linelen;
+
+    while ((linelen = getline(&linebuf, &linecap, fp)) != -1) {
+        char *trimmed = trim_whitespace(linebuf);
         if (trimmed[0] == '#' || trimmed[0] == '\0') continue;
 
         char *eq = strchr(trimmed, '=');
@@ -80,6 +88,7 @@ void registry_get_distro_pkg(const char *dotfiles_dir, const char *tool, const c
             }
         }
     }
+    free(linebuf);
     fclose(fp);
 }
 
@@ -87,9 +96,12 @@ void registry_get_all_tools(const char *dotfiles_dir, StringArray *tools) {
     FILE *fp = open_registry_file(dotfiles_dir);
     if (!fp) return;
 
-    char line[1024];
-    while (fgets(line, sizeof(line), fp)) {
-        char *trimmed = trim_whitespace(line);
+    char *linebuf = NULL;
+    size_t linecap = 0;
+    ssize_t linelen;
+
+    while ((linelen = getline(&linebuf, &linecap, fp)) != -1) {
+        char *trimmed = trim_whitespace(linebuf);
         if (trimmed[0] == '#' || trimmed[0] == '\0') continue;
 
         char *eq = strchr(trimmed, '=');
@@ -101,6 +113,7 @@ void registry_get_all_tools(const char *dotfiles_dir, StringArray *tools) {
             }
         }
     }
+    free(linebuf);
     fclose(fp);
 }
 

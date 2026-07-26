@@ -23,8 +23,29 @@ static void unfold_symlink_cb(const char *symlink_path, void *user_data) {
                 log_warn("[DRY-RUN] Would unfold directory symlink: %s -> %s", symlink_path, target);
             } else {
                 log_warn("Unfolding directory symlink: %s -> %s", symlink_path, target);
-                unlink(symlink_path);
-                mkdir(symlink_path, 0755);
+                char tmp_dir[PATH_MAX + 64];
+                snprintf(tmp_dir, sizeof(tmp_dir), "%s.unfold_tmp_%d", symlink_path, getpid());
+                if (mkdir_p(tmp_dir, 0755) == 0) {
+                    DIR *tdir = opendir(target);
+                    if (tdir) {
+                        struct dirent *entry;
+                        while ((entry = readdir(tdir)) != NULL) {
+                            if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0) continue;
+                            char child_src[PATH_MAX], child_dst[PATH_MAX];
+                            join_path(child_src, sizeof(child_src), target, entry->d_name);
+                            join_path(child_dst, sizeof(child_dst), tmp_dir, entry->d_name);
+                            symlink(child_src, child_dst);
+                        }
+                        closedir(tdir);
+
+                        unlink(symlink_path);
+                        if (rename(tmp_dir, symlink_path) != 0) {
+                            log_error("Failed to atomic rename unfolded directory '%s'", tmp_dir);
+                        }
+                    } else {
+                        rmdir(tmp_dir);
+                    }
+                }
             }
             ctx->unfolded_count++;
         }

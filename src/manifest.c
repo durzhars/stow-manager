@@ -8,10 +8,11 @@ static void parse_space_delimited(const char *str, StringArray *arr) {
     char *copy = strdup(str);
     if (!copy) return;
 
-    char *token = strtok(copy, " \t\r\n");
+    char *saveptr = NULL;
+    char *token = strtok_r(copy, " \t\r\n", &saveptr);
     while (token) {
         str_array_append(arr, token);
-        token = strtok(NULL, " \t\r\n");
+        token = strtok_r(NULL, " \t\r\n", &saveptr);
     }
     free(copy);
 }
@@ -25,14 +26,18 @@ void manifest_init(PackageManifest *manifest, const char *pkg_name) {
 
 bool manifest_load(PackageManifest *manifest, const char *dotfiles_dir) {
     char path[PATH_MAX * 4];
-    snprintf(path, sizeof(path), "%s/%s/.stowdeps", dotfiles_dir, manifest->package_name);
+    join_path(path, sizeof(path), dotfiles_dir, manifest->package_name);
+    join_path(path, sizeof(path), path, ".stowdeps");
 
     FILE *fp = fopen(path, "r");
     if (!fp) return false;
 
-    char line[1024];
-    while (fgets(line, sizeof(line), fp)) {
-        char *trimmed = trim_whitespace(line);
+    char *linebuf = NULL;
+    size_t linecap = 0;
+    ssize_t linelen;
+
+    while ((linelen = getline(&linebuf, &linecap, fp)) != -1) {
+        char *trimmed = trim_whitespace(linebuf);
         if (trimmed[0] == '#' || trimmed[0] == '\0') continue;
 
         char *eq = strchr(trimmed, '=');
@@ -51,6 +56,7 @@ bool manifest_load(PackageManifest *manifest, const char *dotfiles_dir) {
         }
     }
 
+    free(linebuf);
     fclose(fp);
     return true;
 }
@@ -159,7 +165,8 @@ void manifest_remove_dep(const char *dotfiles_dir, const char *pkg_name, const c
 
 void manifest_show(const char *dotfiles_dir, const char *pkg_name) {
     char path[PATH_MAX * 4];
-    snprintf(path, sizeof(path), "%s/%s/.stowdeps", dotfiles_dir, pkg_name);
+    join_path(path, sizeof(path), dotfiles_dir, pkg_name);
+    join_path(path, sizeof(path), path, ".stowdeps");
 
     if (!file_exists(path)) {
         log_warn("Package '%s' does not have a '.stowdeps' manifest file.", pkg_name);
@@ -169,10 +176,13 @@ void manifest_show(const char *dotfiles_dir, const char *pkg_name) {
     printf("\n%s%s=== Manifest [.stowdeps] for '%s' ===%s\n\n", COLOR_CYAN, COLOR_BOLD, pkg_name, COLOR_RESET);
     FILE *fp = fopen(path, "r");
     if (fp) {
-        char line[512];
-        while (fgets(line, sizeof(line), fp)) {
-            fputs(line, stdout);
+        char *linebuf = NULL;
+        size_t linecap = 0;
+        ssize_t linelen;
+        while ((linelen = getline(&linebuf, &linecap, fp)) != -1) {
+            fputs(linebuf, stdout);
         }
+        free(linebuf);
         fclose(fp);
     }
     printf("\n");

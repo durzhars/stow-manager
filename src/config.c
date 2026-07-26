@@ -38,9 +38,12 @@ bool config_load(Config *cfg) {
     FILE *fp = fopen(cfg->config_file_path, "r");
     if (!fp) return false;
 
-    char line[1024];
-    while (fgets(line, sizeof(line), fp)) {
-        char *trimmed = trim_whitespace(line);
+    char *linebuf = NULL;
+    size_t linecap = 0;
+    ssize_t linelen;
+
+    while ((linelen = getline(&linebuf, &linecap, fp)) != -1) {
+        char *trimmed = trim_whitespace(linebuf);
         if (trimmed[0] == '#' || trimmed[0] == '\0') continue;
 
         char *eq = strchr(trimmed, '=');
@@ -50,13 +53,14 @@ bool config_load(Config *cfg) {
             char *val = trim_whitespace(eq + 1);
 
             if (strcmp(key, "DOTFILES_DIR") == 0 || strcmp(key, "DOTFILES_DIRS") == 0) {
-                char *token = strtok(val, ":");
+                char *saveptr = NULL;
+                char *token = strtok_r(val, ":", &saveptr);
                 while (token) {
                     char *p = trim_whitespace(token);
                     if (strlen(p) > 0 && !str_array_contains(&cfg->dotfiles_dirs, p)) {
                         str_array_append(&cfg->dotfiles_dirs, p);
                     }
-                    token = strtok(NULL, ":");
+                    token = strtok_r(NULL, ":", &saveptr);
                 }
             } else if (strcmp(key, "TARGET_DIR") == 0) {
                 snprintf(cfg->target_dir, sizeof(cfg->target_dir), "%s", val);
@@ -64,6 +68,7 @@ bool config_load(Config *cfg) {
         }
     }
 
+    free(linebuf);
     fclose(fp);
     return true;
 }
