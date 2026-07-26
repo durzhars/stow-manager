@@ -7,11 +7,11 @@ source "$SCRIPT_DIR/test_helpers.sh"
 
 echo -e "${COLOR_CYAN}${COLOR_BOLD}=== Feature Tests: Dependency Management ===${COLOR_RESET}\n"
 
-# 1. make:package <name>
-echo -e "${COLOR_BOLD}[Test 1] Scaffold package (make:package)${COLOR_RESET}"
+# 1. pkg:create <name>
+echo -e "${COLOR_BOLD}[Test 1] Scaffold package (pkg:create / make:package)${COLOR_RESET}"
 setup_sandbox
 
-assert_success "$STOW_BIN make:package editor" "stow-manager make:package editor succeeded"
+assert_success "$STOW_BIN pkg:create editor" "stow-manager pkg:create editor succeeded"
 assert_path_exists "$STOW_DOTFILES_DIR/editor" "Scaffolded package directory created"
 MANIFEST_FILE="$STOW_DOTFILES_DIR/editor/.stowdeps"
 assert_path_exists "$MANIFEST_FILE" ".stowdeps manifest file created"
@@ -42,15 +42,27 @@ assert_file_contains "$LAST_CMD_OUTPUT" 'CONFLICTS="zsh"' "deps:show outputs CON
 
 # 4. deps:edit <pkg> <dep> <new_type>
 echo -e "\n${COLOR_BOLD}[Test 4] Edit dependency type (deps:edit)${COLOR_RESET}"
+setup_sandbox
+mkdir -p "$STOW_DOTFILES_DIR/terminal"
+$STOW_BIN deps:add terminal fzf --optional >/dev/null
+MANIFEST_FILE="$STOW_DOTFILES_DIR/terminal/.stowdeps"
+assert_file_contains "$MANIFEST_FILE" 'OPTIONAL="fzf"' "Initially OPTIONAL=\"fzf\""
+
 assert_success "$STOW_BIN deps:edit terminal fzf --required" "deps:edit terminal fzf --required succeeded"
-assert_file_contains "$MANIFEST_FILE" 'bash fzf' ".stowdeps manifest updated with REQUIRED containing 'bash fzf'"
+assert_file_contains "$MANIFEST_FILE" 'REQUIRED="fzf"' ".stowdeps manifest updated to REQUIRED=\"fzf\""
 assert_file_contains "$MANIFEST_FILE" 'OPTIONAL=""' ".stowdeps manifest OPTIONAL is now empty"
 
 # 5. deps:remove <pkg> <dep>
 echo -e "\n${COLOR_BOLD}[Test 5] Remove dependency (deps:remove)${COLOR_RESET}"
-assert_success "$STOW_BIN deps:remove terminal fzf" "stow-manager deps:remove terminal fzf succeeded"
-assert_file_contains "$MANIFEST_FILE" 'REQUIRED="bash"' ".stowdeps manifest updated and REQUIRED retains bash"
-assert_file_not_contains "$MANIFEST_FILE" 'fzf' ".stowdeps manifest no longer contains fzf"
+setup_sandbox
+mkdir -p "$STOW_DOTFILES_DIR/terminal"
+$STOW_BIN deps:add terminal bash --required >/dev/null
+MANIFEST_FILE="$STOW_DOTFILES_DIR/terminal/.stowdeps"
+assert_file_contains "$MANIFEST_FILE" 'REQUIRED="bash"' "Initially REQUIRED=\"bash\""
+
+assert_success "$STOW_BIN deps:remove terminal bash" "stow-manager deps:remove terminal bash succeeded"
+assert_file_contains "$MANIFEST_FILE" 'REQUIRED=""' ".stowdeps manifest REQUIRED is now cleared"
+assert_file_not_contains "$MANIFEST_FILE" 'bash' ".stowdeps manifest no longer contains bash"
 
 # 6. pkg:create & pkg:remove
 echo -e "\n${COLOR_BOLD}[Test 6] Package CRUD operations (pkg:create & pkg:remove)${COLOR_RESET}"
