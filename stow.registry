@@ -1,0 +1,25 @@
+# Central Binary Executable, Plugin & Distro Package Mapping Registry
+
+# =============================================================================
+# Binary Executable Aliases & Plugin File Paths
+# Format: tool_name = binary1 | binary2 | plugin:/path/to/file | ...
+# =============================================================================
+wl-clipboard = wl-copy | wl-paste
+fd = fd | fdfind
+rg = rg | ripgrep
+zsh-autosuggestions = plugin:/usr/share/zsh/plugins/zsh-autosuggestions/zsh-autosuggestions.zsh | plugin:/usr/share/zsh-autosuggestions/zsh-autosuggestions.zsh | plugin:/home/linuxbrew/.linuxbrew/share/zsh-autosuggestions/zsh-autosuggestions.zsh
+zsh-syntax-highlighting = plugin:/usr/share/zsh/plugins/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh | plugin:/usr/share/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh | plugin:/home/linuxbrew/.linuxbrew/share/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh
+zsh-history-substring-search = plugin:/usr/share/zsh/plugins/zsh-history-substring-search/zsh-history-substring-search.zsh | plugin:/usr/share/zsh-history-substring-search/zsh-history-substring-search.zsh | plugin:/home/linuxbrew/.linuxbrew/share/zsh-history-substring-search/zsh-history-substring-search.zsh
+
+# =============================================================================
+# Distro Package Overrides
+# Format: tool_name@distro_id = package_name
+# =============================================================================
+fd@ubuntu = fd-find
+fd@debian = fd-find
+fd@pop = fd-find
+fd@mint = fd-find
+rg@ubuntu = ripgrep
+rg@debian = ripgrep
+rg@pop = ripgrep
+rg@mint = ripgrep

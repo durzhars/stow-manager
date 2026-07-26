@@ -1,0 +1,21 @@
+# =============================================================================
+# Dynamic Color Outputs & Artifacts
+# =============================================================================
+
+# Hyprland / Noctalia dynamically generated colors
+hyprland/.config/hypr/noctalia/noctalia-colors.lua
+hyprland/.config/noctalia/colors.json
+
+# Neovim dynamically generated colorscheme files
+nvim/.config/nvim/lua/colors/neovim.lua
+misc/Projects/colors.nvim/lua/dcolorscheme/neovim.lua
+
+# Kitty active theme symlinks/generated files and backups
+terminal/.config/kitty/current-theme.conf
+terminal/.config/kitty/themes/noctalia.conf
+terminal/.config/kitty/kitty.conf.bak
+diffs.txt
+
+# C Build & Target Directories
+build/
+bin/
