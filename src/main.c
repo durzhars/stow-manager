@@ -32,37 +32,26 @@ static const char *EMBEDDED_HELP =
 "Run `make` to compile full help menu or pass `-h` / `--help`.\n";
 #endif
 
-static void render_markdown_line(char *line, bool is_tty) {
-    size_t len = strlen(line);
-    if (len > 0 && line[len - 1] == '\n') {
-        line[len - 1] = '\0';
-    }
+static void render_inline_markdown(const char *text, bool is_tty) {
+    if (!text) return;
+    const char *p = text;
+    bool in_bold = false;
+    bool in_code = false;
 
-    if (!is_tty) {
-        printf("%s\n", line);
-        return;
-    }
-
-    if (strncmp(line, "# ", 2) == 0) {
-        printf("\n%s%s%s%s\n", COLOR_CYAN, COLOR_BOLD, line + 2, COLOR_RESET);
-    } else if (strncmp(line, "## ", 3) == 0) {
-        printf("\n%s%s=== %s ===%s\n", COLOR_CYAN, COLOR_BOLD, line + 3, COLOR_RESET);
-    } else {
-        char *p = line;
-        bool in_bold = false;
-        bool in_code = false;
-
-        while (*p) {
-            if (strncmp(p, "**", 2) == 0) {
+    while (*p) {
+        if (strncmp(p, "**", 2) == 0) {
+            if (is_tty) {
                 if (in_bold) {
                     printf("%s", COLOR_RESET);
                     in_bold = false;
                 } else {
-                    printf("%s%s", COLOR_BOLD, COLOR_CYAN);
+                    printf("%s%s", COLOR_BOLD, COLOR_WHITE);
                     in_bold = true;
                 }
-                p += 2;
-            } else if (*p == '`') {
+            }
+            p += 2;
+        } else if (*p == '`') {
+            if (is_tty) {
                 if (in_code) {
                     printf("%s", COLOR_RESET);
                     in_code = false;
@@ -70,17 +59,60 @@ static void render_markdown_line(char *line, bool is_tty) {
                     printf("%s", COLOR_CYAN);
                     in_code = true;
                 }
-                p++;
-            } else {
-                putchar(*p);
-                p++;
             }
+            p++;
+        } else {
+            putchar(*p);
+            p++;
         }
-        if (in_bold || in_code) {
-            printf("%s", COLOR_RESET);
-        }
-        printf("\n");
     }
+    if (is_tty && (in_bold || in_code)) {
+        printf("%s", COLOR_RESET);
+    }
+}
+
+static void render_markdown_line(char *line, bool is_tty) {
+    size_t len = strlen(line);
+    if (len > 0 && line[len - 1] == '\n') {
+        line[len - 1] = '\0';
+    }
+
+    if (!is_tty) {
+        render_inline_markdown(line, false);
+        printf("\n");
+        return;
+    }
+
+    if (strncmp(line, "# ", 2) == 0) {
+        printf("\n%s%s", COLOR_CYAN, COLOR_BOLD);
+        render_inline_markdown(line + 2, true);
+        printf("%s\n", COLOR_RESET);
+        return;
+    }
+
+    if (strncmp(line, "## ", 3) == 0) {
+        printf("\n%s%s=== ", COLOR_CYAN, COLOR_BOLD);
+        render_inline_markdown(line + 3, true);
+        printf("%s%s ===%s\n", COLOR_CYAN, COLOR_BOLD, COLOR_RESET);
+        return;
+    }
+
+    if (strncmp(line, "- ", 2) == 0) {
+        printf("  %s•%s ", COLOR_CYAN, COLOR_RESET);
+        render_inline_markdown(line + 2, true);
+        printf("\n");
+        return;
+    }
+
+    if (strncmp(line, "  ", 2) == 0 && line[2] != '\0' && line[2] != ' ') {
+        printf("    %s$%s %s", COLOR_YELLOW, COLOR_RESET, COLOR_GREEN);
+        render_inline_markdown(line + 2, true);
+        printf("%s\n", COLOR_RESET);
+        return;
+    }
+
+    render_inline_markdown(line, true);
+    printf("\n");
 }
 
 static void show_help(void) {
