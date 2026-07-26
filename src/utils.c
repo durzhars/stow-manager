@@ -177,11 +177,19 @@ void str_array_append(StringArray *arr, const char *str) {
     if (arr->count >= arr->capacity) {
         size_t new_cap = (arr->capacity == 0) ? 8 : arr->capacity * 2;
         char **new_items = realloc(arr->items, new_cap * sizeof(char *));
-        if (!new_items) return;
+        if (!new_items) {
+            log_error("Failed to allocate memory in str_array_append");
+            return;
+        }
         arr->items = new_items;
         arr->capacity = new_cap;
     }
-    arr->items[arr->count++] = strdup(str);
+    char *copy = strdup(str);
+    if (!copy) {
+        log_error("Failed to copy string in str_array_append");
+        return;
+    }
+    arr->items[arr->count++] = copy;
 }
 
 bool str_array_contains(const StringArray *arr, const char *str) {
@@ -227,22 +235,41 @@ void get_all_packages(const char *dotfiles_dir, StringArray *packages) {
     DIR *dir = opendir(dotfiles_dir);
     if (!dir) return;
 
+    StringArray ignored;
+    str_array_init(&ignored);
+
+    char ignore_file[PATH_MAX];
+    join_path(ignore_file, sizeof(ignore_file), dotfiles_dir, ".stowignore");
+    FILE *fp = fopen(ignore_file, "r");
+    if (fp) {
+        char *linebuf = NULL;
+        size_t linecap = 0;
+        ssize_t linelen;
+        while ((linelen = getline(&linebuf, &linecap, fp)) != -1) {
+            char *trimmed = trim_whitespace(linebuf);
+            if (trimmed[0] != '#' && trimmed[0] != '\0') {
+                str_array_append(&ignored, trimmed);
+            }
+        }
+        free(linebuf);
+        fclose(fp);
+    }
+
     struct dirent *entry;
     while ((entry = readdir(dir)) != NULL) {
         const char *name = entry->d_name;
-        if (strcmp(name, ".") != 0 && strcmp(name, "..") != 0 &&
-            strcmp(name, ".git") != 0 && strcmp(name, "scratch") != 0 &&
-            strcmp(name, "scripts") != 0 && strcmp(name, "src") != 0 &&
-            strcmp(name, "include") != 0 && strcmp(name, "build") != 0 &&
-            strcmp(name, "bin") != 0 && strcmp(name, "tests") != 0) {
-            char path[PATH_MAX * 2];
-            snprintf(path, sizeof(path), "%s/%s", dotfiles_dir, name);
-            if (is_dir(path)) {
-                str_array_append(packages, name);
-            }
+        if (name[0] == '.') continue;
+        if (strcmp(name, "build") == 0) continue;
+        if (str_array_contains(&ignored, name)) continue;
+
+        char path[PATH_MAX * 2];
+        join_path(path, sizeof(path), dotfiles_dir, name);
+        if (is_dir(path)) {
+            str_array_append(packages, name);
         }
     }
     closedir(dir);
+    str_array_free(&ignored);
 }
 
 void walk_dir_symlinks(const char *dir_path, int current_depth, int max_depth, WalkSymlinkCallback cb, void *user_data) {

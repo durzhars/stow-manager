@@ -4,28 +4,87 @@
 #include "scanner.h"
 #include "registry.h"
 
-static bool file_contains_tool_invocation(const char *filepath, const char *tool) {
+static void parse_shebang_interpreter(const char *first_line, StringArray *shebangs) {
+    if (strncmp(first_line, "#!", 2) != 0) return;
+
+    char *copy = strdup(first_line + 2);
+    if (!copy) return;
+
+    char *saveptr = NULL;
+    char *token = strtok_r(copy, " \t\r\n", &saveptr);
+
+    while (token) {
+        char *trimmed = trim_whitespace(token);
+        if (trimmed[0] != '\0') {
+            if (trimmed[0] != '-') {
+                char *base = strrchr(trimmed, '/');
+                if (base) trimmed = base + 1;
+
+                if (strcmp(trimmed, "env") != 0 && strcmp(trimmed, "exec") != 0) {
+                    if (strlen(trimmed) > 0 && !str_array_contains(shebangs, trimmed)) {
+                        str_array_append(shebangs, trimmed);
+                    }
+                    break;
+                }
+            }
+        }
+        token = strtok_r(NULL, " \t\r\n", &saveptr);
+    }
+    free(copy);
+}
+
+static void process_single_file(const char *filepath, const StringArray *candidate_tools, StringArray *shebangs, StringArray *invocations) {
     FILE *fp = fopen(filepath, "r");
-    if (!fp) return false;
+    if (!fp) return;
 
-    char line[1024];
-    bool found = false;
-    char pattern1[256], pattern2[256], pattern3[256], pattern4[256];
-    snprintf(pattern1, sizeof(pattern1), "command -v %s", tool);
-    snprintf(pattern2, sizeof(pattern2), "exec %s", tool);
-    snprintf(pattern3, sizeof(pattern3), "%s init", tool);
-    snprintf(pattern4, sizeof(pattern4), "%s -c", tool);
+    char *linebuf = NULL;
+    size_t linecap = 0;
+    ssize_t linelen;
+    bool is_first_line = true;
 
-    while (fgets(line, sizeof(line), fp)) {
-        if (strstr(line, pattern1) || strstr(line, pattern2) ||
-            strstr(line, pattern3) || strstr(line, pattern4)) {
-            found = true;
-            break;
+    typedef struct {
+        const char *tool;
+        char p1[256], p2[256], p3[256], p4[256];
+        bool found;
+    } ToolPattern;
+
+    ToolPattern *patterns = calloc(candidate_tools->count, sizeof(ToolPattern));
+    if (!patterns) {
+        fclose(fp);
+        return;
+    }
+
+    for (size_t t = 0; t < candidate_tools->count; t++) {
+        patterns[t].tool = candidate_tools->items[t];
+        patterns[t].found = str_array_contains(invocations, candidate_tools->items[t]);
+        snprintf(patterns[t].p1, sizeof(patterns[t].p1), "command -v %s", patterns[t].tool);
+        snprintf(patterns[t].p2, sizeof(patterns[t].p2), "exec %s", patterns[t].tool);
+        snprintf(patterns[t].p3, sizeof(patterns[t].p3), "%s init", patterns[t].tool);
+        snprintf(patterns[t].p4, sizeof(patterns[t].p4), "%s -c", patterns[t].tool);
+    }
+
+    while ((linelen = getline(&linebuf, &linecap, fp)) != -1) {
+        if (is_first_line) {
+            is_first_line = false;
+            parse_shebang_interpreter(linebuf, shebangs);
+        }
+
+        for (size_t t = 0; t < candidate_tools->count; t++) {
+            if (!patterns[t].found) {
+                if (strstr(linebuf, patterns[t].p1) || strstr(linebuf, patterns[t].p2) ||
+                    strstr(linebuf, patterns[t].p3) || strstr(linebuf, patterns[t].p4)) {
+                    patterns[t].found = true;
+                    if (!str_array_contains(invocations, patterns[t].tool)) {
+                        str_array_append(invocations, patterns[t].tool);
+                    }
+                }
+            }
         }
     }
 
+    free(linebuf);
+    free(patterns);
     fclose(fp);
-    return found;
 }
 
 static void scan_dir_recursive(const char *dotfiles_dir, const char *dir_path, const StringArray *candidate_tools, StringArray *shebangs, StringArray *invocations) {
@@ -38,39 +97,12 @@ static void scan_dir_recursive(const char *dotfiles_dir, const char *dir_path, c
     while ((entry = readdir(dir)) != NULL) {
         if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0) continue;
 
-        snprintf(path, sizeof(path), "%s/%s", dir_path, entry->d_name);
+        join_path(path, sizeof(path), dir_path, entry->d_name);
 
         if (is_dir(path)) {
             scan_dir_recursive(dotfiles_dir, path, candidate_tools, shebangs, invocations);
         } else if (file_exists(path) && !is_symlink(path)) {
-            FILE *fp = fopen(path, "r");
-            if (fp) {
-                char first_line[256];
-                if (fgets(first_line, sizeof(first_line), fp)) {
-                    if (strncmp(first_line, "#!", 2) == 0) {
-                        char *last_space = strrchr(first_line, ' ');
-                        char *bin = last_space ? last_space + 1 : first_line + 2;
-                        char *trimmed = trim_whitespace(bin);
-                        char *base = strrchr(trimmed, '/');
-                        if (base) trimmed = base + 1;
-                        if (strlen(trimmed) > 0 && strcmp(trimmed, "env") != 0 && strcmp(trimmed, "sh") != 0) {
-                            if (!str_array_contains(shebangs, trimmed)) {
-                                str_array_append(shebangs, trimmed);
-                            }
-                        }
-                    }
-                }
-                fclose(fp);
-
-                for (size_t t = 0; t < candidate_tools->count; t++) {
-                    const char *tool = candidate_tools->items[t];
-                    if (file_contains_tool_invocation(path, tool)) {
-                        if (!str_array_contains(invocations, tool)) {
-                            str_array_append(invocations, tool);
-                        }
-                    }
-                }
-            }
+            process_single_file(path, candidate_tools, shebangs, invocations);
         }
     }
 
@@ -79,7 +111,7 @@ static void scan_dir_recursive(const char *dotfiles_dir, const char *dir_path, c
 
 void scan_package(const char *dotfiles_dir, const char *pkg_name) {
     char pkg_dir[PATH_MAX * 2];
-    snprintf(pkg_dir, sizeof(pkg_dir), "%s/%s", dotfiles_dir, pkg_name);
+    join_path(pkg_dir, sizeof(pkg_dir), dotfiles_dir, pkg_name);
 
     if (!file_exists(pkg_dir)) {
         log_error("Package directory '%s' does not exist!", pkg_name);
@@ -116,22 +148,23 @@ void scan_package(const char *dotfiles_dir, const char *pkg_name) {
     printf("\n\n");
 
     char manifest_path[PATH_MAX * 4];
-    snprintf(manifest_path, sizeof(manifest_path), "%s/.stowdeps", pkg_dir);
+    join_path(manifest_path, sizeof(manifest_path), pkg_dir, ".stowdeps");
     if (!file_exists(manifest_path)) {
         log_info("Auto-generating '.stowdeps' manifest for '%s'...", pkg_name);
         PackageManifest manifest;
         manifest_init(&manifest, pkg_name);
-        manifest.required = shebangs;
-        manifest.optional = invocations;
+        for (size_t i = 0; i < shebangs.count; i++) {
+            str_array_append(&manifest.required, shebangs.items[i]);
+        }
+        for (size_t i = 0; i < invocations.count; i++) {
+            str_array_append(&manifest.optional, invocations.items[i]);
+        }
         manifest_save(&manifest, dotfiles_dir);
         log_success("Generated '%s'", manifest_path);
-        manifest.required.items = NULL;
-        manifest.optional.items = NULL;
         manifest_free(&manifest);
-    } else {
-        str_array_free(&shebangs);
-        str_array_free(&invocations);
     }
 
+    str_array_free(&shebangs);
+    str_array_free(&invocations);
     str_array_free(&candidate_tools);
 }
