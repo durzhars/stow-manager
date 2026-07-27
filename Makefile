@@ -20,8 +20,14 @@ TEST_UNIT_DIR = $(TEST_DIR)/unit
 TEST_FEATURE_DIR = $(TEST_DIR)/feature
 
 SRCS = $(SRC_DIR)/main.c \
+       $(SRC_DIR)/help.c \
        $(SRC_DIR)/logger.c \
-       $(SRC_DIR)/utils.c \
+       $(SRC_DIR)/utils/mem.c \
+       $(SRC_DIR)/utils/path.c \
+       $(SRC_DIR)/utils/fs.c \
+       $(SRC_DIR)/utils/env.c \
+       $(SRC_DIR)/utils/signal.c \
+       $(SRC_DIR)/utils/stowignore.c \
        $(SRC_DIR)/config.c \
        $(SRC_DIR)/registry.c \
        $(SRC_DIR)/manifest.c \
@@ -89,6 +95,7 @@ $(BUILD_DIR)/main.o: $(SRC_DIR)/main.c $(HELP_TXT_GEN) | $(BUILD_DIR)
 	$(CC) $(CFLAGS) -I$(BUILD_DIR) -c $< -o $@
 
 $(BUILD_DIR)/%.o: $(SRC_DIR)/%.c | $(BUILD_DIR)
+	@mkdir -p $(dir $@)
 	$(CC) $(CFLAGS) -c $< -o $@
 
 $(BUILD_DIR)/%.o: $(TEST_UNIT_DIR)/%.c | $(BUILD_DIR)

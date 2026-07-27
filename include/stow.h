@@ -23,11 +23,7 @@
 
 typedef enum { STOW_STATUS_UNSTOWED = 0, STOW_STATUS_PARTIAL, STOW_STATUS_STOWED } StowStatus;
 
-typedef enum {
-    STOW_ACTION_STOW = 0,
-    STOW_ACTION_UNSTOW,
-    STOW_ACTION_RESTOW
-} StowAction;
+typedef enum { STOW_ACTION_STOW = 0, STOW_ACTION_UNSTOW, STOW_ACTION_RESTOW } StowAction;
 
 void unfold_directory_symlinks(const char *target_dir, const char *dotfiles_dir, bool dry_run);
 void prepare_target_conflicts(const char *target_dir,

@@ -143,7 +143,8 @@ static void prepare_conflict_cb(const char* file_path, const char* rel_path,
               rel_path);
 
     if (is_symlink(target_path)) {
-        if (is_symlink_pointing_to(target_path, pkg_file_path, real_pkg_file_path)) {
+        if (is_symlink_pointing_to(target_path, pkg_file_path,
+                                   real_pkg_file_path)) {
             ctx->unchanged++;
         } else {
             if (ctx->dry_run) {
@@ -216,8 +217,9 @@ static void build_stow_command(const char* dotfiles_dir, const char* target_dir,
     }
     str_array_free(&ignore_patterns);
 
-    char escaped_dotfiles[PATH_MAX * 2], escaped_target[PATH_MAX * 2],
-        escaped_pkg[PATH_MAX * 2];
+    char escaped_dotfiles[PATH_MAX * 2];
+    char escaped_target[PATH_MAX * 2];
+    char escaped_pkg[PATH_MAX * 2];
     escape_shell_arg(dotfiles_dir, escaped_dotfiles, sizeof(escaped_dotfiles));
     escape_shell_arg(target_dir, escaped_target, sizeof(escaped_target));
     escape_shell_arg(pkg_name, escaped_pkg, sizeof(escaped_pkg));
@@ -303,7 +305,8 @@ static void check_stowed_stats_cb(const char* file_path, const char* rel_path,
               rel_path);
 
     if (is_symlink(target_path)) {
-        if (is_symlink_pointing_to(target_path, pkg_file_path, real_pkg_file_path)) {
+        if (is_symlink_pointing_to(target_path, pkg_file_path,
+                                   real_pkg_file_path)) {
             ctx->stowed_files++;
         }
     }
@@ -351,7 +354,8 @@ bool is_package_stowed(const char* target_dir, const char* dotfiles_dir,
                        const char* pkg_name) {
     StowStatus status =
         get_package_stow_status(target_dir, dotfiles_dir, pkg_name);
-    return status == STOW_STATUS_STOWED || status == STOW_STATUS_PARTIAL;
+    return (bool)(status == STOW_STATUS_STOWED ||
+                  status == STOW_STATUS_PARTIAL);
 }
 
 void handle_mutual_exclusions(const char* target_dir, const char* dotfiles_dir,

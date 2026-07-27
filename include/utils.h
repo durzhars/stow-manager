@@ -82,7 +82,9 @@ bool is_dir(const char *path);
 bool is_symlink(const char *path);
 bool is_executable_in_path(const char *executable);
 char *read_symlink_target(const char *path);
-bool is_symlink_pointing_to(const char *symlink_path, const char *pkg_file_path, const char *real_pkg_file_path);
+bool is_symlink_pointing_to(const char *symlink_path,
+                            const char *pkg_file_path,
+                            const char *real_pkg_file_path);
 void get_distro_id(char *buf, size_t buf_size);
 void normalize_path(char *path);
 void collapse_path(char *path);

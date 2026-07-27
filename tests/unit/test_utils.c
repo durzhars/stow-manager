@@ -316,9 +316,12 @@ void test_default_stowignore(void)
 
     ASSERT(is_path_ignored(".config/nvim_lazyvim_backup/.gitignore", &defaults),
            "Subdirectory .gitignore must be ignored by default patterns");
-    ASSERT(is_path_ignored("README.md", &defaults), "README.md must be ignored by default patterns");
-    ASSERT(is_path_ignored("nested/README.md", &defaults), "nested/README.md must be ignored by default patterns");
-    ASSERT(!is_path_ignored(".config/nvim/init.lua", &defaults), "Normal config file must not be ignored");
+    ASSERT(is_path_ignored("README.md", &defaults),
+           "README.md must be ignored by default patterns");
+    ASSERT(is_path_ignored("nested/README.md", &defaults),
+           "nested/README.md must be ignored by default patterns");
+    ASSERT(!is_path_ignored(".config/nvim/init.lua", &defaults),
+           "Normal config file must not be ignored");
 
     str_array_free(&defaults);
 }

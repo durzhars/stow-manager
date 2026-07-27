@@ -1,0 +1,185 @@
+/*
+ * Dotfiles Stow Manager (stow-manager)
+ * Copyright (C) 2026 durzhars
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program. If not, see <https://www.gnu.org/licenses/>.
+ */
+
+#define _GNU_SOURCE
+#define _DEFAULT_SOURCE
+#define _POSIX_C_SOURCE 200809L
+
+#include "utils.h"
+#include <limits.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
+
+void get_xdg_config_home(char *buf, size_t buf_size)
+{
+    const char *env = getenv("XDG_CONFIG_HOME");
+    if (env && strlen(env) > 0 && env[0] == '/') {
+        snprintf(buf, buf_size, "%s", env);
+    } else {
+        const char *home = getenv("HOME");
+        if (home && strlen(home) > 0) {
+            snprintf(buf, buf_size, "%s/.config", home);
+        } else {
+            snprintf(buf, buf_size, "/tmp");
+        }
+    }
+}
+
+void get_xdg_data_home(char *buf, size_t buf_size)
+{
+    const char *env = getenv("XDG_DATA_HOME");
+    if (env && strlen(env) > 0 && env[0] == '/') {
+        snprintf(buf, buf_size, "%s", env);
+    } else {
+        const char *home = getenv("HOME");
+        if (home && strlen(home) > 0) {
+            snprintf(buf, buf_size, "%s/.local/share", home);
+        } else {
+            snprintf(buf, buf_size, "/tmp");
+        }
+    }
+}
+
+void get_xdg_cache_home(char *buf, size_t buf_size)
+{
+    const char *env = getenv("XDG_CACHE_HOME");
+    if (env && strlen(env) > 0 && env[0] == '/') {
+        snprintf(buf, buf_size, "%s", env);
+    } else {
+        const char *home = getenv("HOME");
+        if (home && strlen(home) > 0) {
+            snprintf(buf, buf_size, "%s/.cache", home);
+        } else {
+            snprintf(buf, buf_size, "/tmp");
+        }
+    }
+}
+
+void get_xdg_state_home(char *buf, size_t buf_size)
+{
+    const char *env = getenv("XDG_STATE_HOME");
+    if (env && strlen(env) > 0 && env[0] == '/') {
+        snprintf(buf, buf_size, "%s", env);
+    } else {
+        const char *home = getenv("HOME");
+        if (home && strlen(home) > 0) {
+            snprintf(buf, buf_size, "%s/.local/state", home);
+        } else {
+            snprintf(buf, buf_size, "/tmp");
+        }
+    }
+}
+
+void get_xdg_data_dirs(StringArray *dirs)
+{
+    const char *env = getenv("XDG_DATA_DIRS");
+    if (!env || strlen(env) == 0) {
+        env = "/usr/local/share:/usr/share";
+    }
+    char *copy = safe_strdup(env);
+
+    char *saveptr = NULL;
+    char *token = strtok_r(copy, ":", &saveptr);
+    while (token) {
+        if (strlen(token) > 0) {
+            str_array_append(dirs, token);
+        }
+        token = strtok_r(NULL, ":", &saveptr);
+    }
+    free(copy);
+}
+
+void get_xdg_config_dirs(StringArray *dirs)
+{
+    const char *env = getenv("XDG_CONFIG_DIRS");
+    if (!env || strlen(env) == 0) {
+        env = "/etc/xdg";
+    }
+    char *copy = safe_strdup(env);
+
+    char *saveptr = NULL;
+    char *token = strtok_r(copy, ":", &saveptr);
+    while (token) {
+        if (strlen(token) > 0) {
+            str_array_append(dirs, token);
+        }
+        token = strtok_r(NULL, ":", &saveptr);
+    }
+    free(copy);
+}
+
+void get_distro_id(char *buf, size_t buf_size)
+{
+    buf[0] = '\0';
+    FILE *fp = fopen("/etc/os-release", "r");
+    if (fp) {
+        char line[256];
+        while (fgets(line, sizeof(line), fp)) {
+            if (strncmp(line, "ID=", 3) == 0) {
+                char *val = line + 3;
+                char *trimmed = trim_whitespace(val);
+                snprintf(buf, buf_size, "%s", trimmed);
+                fclose(fp);
+                return;
+            }
+        }
+        fclose(fp);
+    }
+    snprintf(buf, buf_size, "unknown");
+}
+
+bool is_executable_in_path(const char *executable)
+{
+    if (!executable || strlen(executable) == 0) {
+        return false;
+    }
+
+    if (strchr(executable, '/') != NULL) {
+        return access(executable, X_OK) == 0;
+    }
+
+    const char *path_env = getenv("PATH");
+    if (!path_env) {
+        return false;
+    }
+
+    char *path_copy = safe_strdup(path_env);
+
+    char *token = strtok(path_copy, ":");
+    bool found = false;
+    char full_path[PATH_MAX * 2];
+
+    while (token) {
+        snprintf(full_path, sizeof(full_path), "%s/%s", token, executable);
+        if (access(full_path, X_OK) == 0) {
+            found = true;
+            break;
+        }
+        token = strtok(NULL, ":");
+    }
+
+    free(path_copy);
+    return found;
+}
+
+int run_system_cmd(const char *cmd)
+{
+    return system(cmd);
+}
