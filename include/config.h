@@ -19,8 +19,8 @@
 #ifndef CONFIG_H
 #define CONFIG_H
 
-#include <limits.h>
 #include "utils.h"
+#include <limits.h>
 
 typedef struct {
     char config_file_path[PATH_MAX];

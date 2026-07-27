@@ -20,10 +20,11 @@
 #define _DEFAULT_SOURCE
 #define _POSIX_C_SOURCE 200809L
 
-#include "test_framework.h"
 #include "../include/manifest.h"
+#include "test_framework.h"
 
-void test_manifest_load_save(void) {
+void test_manifest_load_save(void)
+{
     char tmp_dir[] = "/tmp/stow_test_XXXXXX";
     ASSERT(mkdtemp(tmp_dir) != NULL, "Should create temporary test directory");
 
@@ -45,10 +46,14 @@ void test_manifest_load_save(void) {
     manifest_init(&loaded, "testpkg");
     ASSERT(manifest_load(&loaded, tmp_dir), "Should load manifest file");
 
-    ASSERT(str_array_contains(&loaded.required, "bash"), "Loaded manifest should contain required 'bash'");
-    ASSERT(str_array_contains(&loaded.required, "zsh"), "Loaded manifest should contain required 'zsh'");
-    ASSERT(str_array_contains(&loaded.optional, "fzf"), "Loaded manifest should contain optional 'fzf'");
-    ASSERT(str_array_contains(&loaded.conflicts, "otherpkg"), "Loaded manifest should contain conflict 'otherpkg'");
+    ASSERT(str_array_contains(&loaded.required, "bash"),
+           "Loaded manifest should contain required 'bash'");
+    ASSERT(str_array_contains(&loaded.required, "zsh"),
+           "Loaded manifest should contain required 'zsh'");
+    ASSERT(str_array_contains(&loaded.optional, "fzf"),
+           "Loaded manifest should contain optional 'fzf'");
+    ASSERT(str_array_contains(&loaded.conflicts, "otherpkg"),
+           "Loaded manifest should contain conflict 'otherpkg'");
 
     manifest_free(&loaded);
 
@@ -57,7 +62,8 @@ void test_manifest_load_save(void) {
     (void)system(cleanup_cmd);
 }
 
-void test_manifest_add_and_remove_dep(void) {
+void test_manifest_add_and_remove_dep(void)
+{
     char tmp_dir[] = "/tmp/stow_man_dep_XXXXXX";
     ASSERT(mkdtemp(tmp_dir) != NULL, "Should create temporary directory for manifest dep test");
 
@@ -85,7 +91,9 @@ void test_manifest_add_and_remove_dep(void) {
     ASSERT(manifest_load(&loaded, tmp_dir), "Reload manifest after duplicate addition");
     size_t bash_count = 0;
     for (size_t i = 0; i < loaded.required.count; i++) {
-        if (strcmp(loaded.required.items[i], "bash") == 0) bash_count++;
+        if (strcmp(loaded.required.items[i], "bash") == 0) {
+            bash_count++;
+        }
     }
     ASSERT(bash_count == 1, "Duplicate dependency 'bash' should not be added twice");
 
@@ -104,9 +112,11 @@ void test_manifest_add_and_remove_dep(void) {
     (void)system(rm_cmd);
 }
 
-void test_manifest_malformed_file(void) {
+void test_manifest_malformed_file(void)
+{
     char tmp_dir[] = "/tmp/stow_man_bad_XXXXXX";
-    ASSERT(mkdtemp(tmp_dir) != NULL, "Should create temporary directory for malformed manifest test");
+    ASSERT(mkdtemp(tmp_dir) != NULL,
+           "Should create temporary directory for malformed manifest test");
 
     char pkg_dir[PATH_MAX];
     snprintf(pkg_dir, sizeof(pkg_dir), "%s/badpkg", tmp_dir);
@@ -127,7 +137,8 @@ void test_manifest_malformed_file(void) {
     manifest_init(&loaded, "badpkg");
     bool ok = manifest_load(&loaded, tmp_dir);
     ASSERT(ok, "Manifest loading should not crash on malformed input");
-    ASSERT(str_array_contains(&loaded.required, "valid_pkg"), "Valid entry in malformed manifest should still be parsed");
+    ASSERT(str_array_contains(&loaded.required, "valid_pkg"),
+           "Valid entry in malformed manifest should still be parsed");
     ASSERT(str_array_contains(&loaded.required, "zsh"), "Valid entry 'zsh' should be parsed");
 
     manifest_free(&loaded);
@@ -137,7 +148,8 @@ void test_manifest_malformed_file(void) {
     (void)system(rm_cmd);
 }
 
-void test_manifest_edit_dep(void) {
+void test_manifest_edit_dep(void)
+{
     char tmp_dir[] = "/tmp/stow_man_edt_XXXXXX";
     ASSERT(mkdtemp(tmp_dir) != NULL, "Should create temporary directory for manifest edit test");
 
@@ -166,7 +178,8 @@ void test_manifest_edit_dep(void) {
     (void)system(rm_cmd);
 }
 
-void test_package_remove(void) {
+void test_package_remove(void)
+{
     char tmp_dotfiles[] = "/tmp/stow_pkg_rm_dot_XXXXXX";
     char tmp_target[] = "/tmp/stow_pkg_rm_tgt_XXXXXX";
     ASSERT(mkdtemp(tmp_dotfiles) != NULL, "Should create temporary dotfiles directory");
@@ -178,7 +191,11 @@ void test_package_remove(void) {
 
     char file1[PATH_MAX];
     snprintf(file1, sizeof(file1), "%s/.file1", pkg_dir);
-    FILE *fp = fopen(file1, "w"); if (fp) { fprintf(fp, "content\n"); fclose(fp); }
+    FILE *fp = fopen(file1, "w");
+    if (fp) {
+        fprintf(fp, "content\n");
+        fclose(fp);
+    }
 
     ASSERT(is_dir(pkg_dir), "rmpkg directory should exist");
 

@@ -19,25 +19,28 @@
 #define _GNU_SOURCE
 #define _POSIX_C_SOURCE 200809L
 #include <getopt.h>
-#include "stow.h"
-#include "scanner.h"
+
 #include "config.h"
+#include "scanner.h"
+#include "stow.h"
 
 #if __has_include("help_text_plain.h")
 #include "help_text_plain.h"
 #else
-static const char *EMBEDDED_HELP_TXT =
-"Dotfiles Stow Manager (stow-manager)\n\n"
-"Usage: stow-manager [options] <command> [arguments]\n\n"
-"Run make to compile full help menu or pass -h / --help.\n";
+static const char *EMBEDDED_HELP_TXT = "Dotfiles Stow Manager (stow-manager)\n\n"
+                                       "Usage: stow-manager [options] <command> [arguments]\n\n"
+                                       "Run make to compile full help menu or pass -h / --help.\n";
 #endif
 
-static void render_plain_line(const char *line, bool use_color) {
+static void render_plain_line(const char *line, bool use_color)
+{
     size_t len = strlen(line);
 
     /* Strip trailing newline for consistent output */
     char buf[1024];
-    if (len >= sizeof(buf)) len = sizeof(buf) - 1;
+    if (len >= sizeof(buf)) {
+        len = sizeof(buf) - 1;
+    }
     memcpy(buf, line, len);
     buf[len] = '\0';
     if (len > 0 && buf[len - 1] == '\n') {
@@ -49,7 +52,8 @@ static void render_plain_line(const char *line, bool use_color) {
         return;
     }
 
-    /* Title line (first non-empty line, no leading whitespace, contains program name) */
+    /* Title line (first non-empty line, no leading whitespace, contains program
+     * name) */
     if (strstr(buf, "stow-manager") && buf[0] != ' ') {
         if (strncmp(buf, "Usage:", 6) == 0) {
             /* "Usage: ..." line */
@@ -62,7 +66,8 @@ static void render_plain_line(const char *line, bool use_color) {
         }
     }
 
-    /* Section headers: lines ending with ':' where leading words are ALL-CAPS */
+    /* Section headers: lines ending with ':' where leading words are ALL-CAPS
+     */
     /* e.g. "GLOBAL OPTIONS:", "CONFIGURATION COMMANDS (config:*):" */
     if (buf[0] != ' ' && buf[0] != '\0' && len > 1) {
         size_t blen = strlen(buf);
@@ -71,7 +76,10 @@ static void render_plain_line(const char *line, bool use_color) {
             const char *p = buf;
             bool is_header = true;
             while (*p && *p != '(') {
-                if (*p >= 'a' && *p <= 'z') { is_header = false; break; }
+                if (*p >= 'a' && *p <= 'z') {
+                    is_header = false;
+                    break;
+                }
                 p++;
             }
             if (is_header) {
@@ -107,7 +115,8 @@ static void render_plain_line(const char *line, bool use_color) {
     printf("%s\n", buf);
 }
 
-static void show_help(void) {
+static void show_help(void)
+{
     bool use_color = isatty(STDOUT_FILENO) != 0 && getenv("NO_COLOR") == NULL;
 
     /* Always use help.txt — spacing is 1:1 with terminal output */
@@ -152,7 +161,9 @@ static void show_help(void) {
     for (size_t i = 0; i < search_paths.count; i++) {
         if (file_exists(search_paths.items[i])) {
             fp = fopen(search_paths.items[i], "r");
-            if (fp) break;
+            if (fp) {
+                break;
+            }
         }
     }
 
@@ -179,11 +190,13 @@ static void show_help(void) {
     str_array_free(&search_paths);
 }
 
-static void handle_config_command(const StringArray *args) {
+static void handle_config_command(const StringArray *args)
+{
     const char *cmd = args->items[0];
     size_t remaining = args->count - 1;
 
-    if (strcmp(cmd, "config:show") == 0 || strcmp(cmd, "config:list") == 0 || strcmp(cmd, "config:get") == 0) {
+    if (strcmp(cmd, "config:show") == 0 || strcmp(cmd, "config:list") == 0 ||
+        strcmp(cmd, "config:get") == 0) {
         config_show();
         return;
     }
@@ -313,13 +326,16 @@ static void handle_config_command(const StringArray *args) {
             config_set_dotfiles_dir(abs_sub);
         } else {
             log_error("Unknown config subcommand or non-existent path '%s'", sub);
-            log_info("Valid commands: config show, config set dotfiles <path>, config target <path>, config add <path>, config remove <path>");
+            log_info("Valid commands: config show, config set dotfiles <path>, "
+                     "config target <path>, config add <path>, config remove "
+                     "<path>");
         }
         return;
     }
 }
 
-int main(int argc, char **argv) {
+int main(int argc, char **argv)
+{
     setup_signal_handlers();
 
     bool auto_install = false;
@@ -386,7 +402,8 @@ int main(int argc, char **argv) {
 
     if (strcmp(cmd, "deps:add") == 0) {
         if (args.count < 3) {
-            log_error("Usage: stow-manager deps:add <package> <dependency> [--required|--optional|--conflict]");
+            log_error("Usage: stow-manager deps:add <package> <dependency> "
+                      "[--required|--optional|--conflict]");
             str_array_free(&args);
             return 1;
         }
@@ -396,8 +413,10 @@ int main(int argc, char **argv) {
         manifest_add_dep(dotfiles_dir, pkg, dep, type);
     } else if (strcmp(cmd, "deps:edit") == 0 || strcmp(cmd, "deps:set") == 0) {
         if (args.count < 4) {
-            log_error("Usage: stow-manager deps:edit <package> <dependency> <new_type>");
-            log_info("Available types: --required, --optional, --conflict (or required, optional, conflict)");
+            log_error("Usage: stow-manager deps:edit <package> <dependency> "
+                      "<new_type>");
+            log_info("Available types: --required, --optional, --conflict (or "
+                     "required, optional, conflict)");
             str_array_free(&args);
             return 1;
         }
@@ -416,7 +435,8 @@ int main(int argc, char **argv) {
             return 1;
         }
         manifest_show(dotfiles_dir, args.items[1]);
-    } else if (strcmp(cmd, "pkg:create") == 0 || strcmp(cmd, "package:create") == 0 || strcmp(cmd, "make:package") == 0 || strcmp(cmd, "make:pkg") == 0) {
+    } else if (strcmp(cmd, "pkg:create") == 0 || strcmp(cmd, "package:create") == 0 ||
+               strcmp(cmd, "make:package") == 0 || strcmp(cmd, "make:pkg") == 0) {
         if (args.count < 2) {
             log_error("Usage: stow-manager pkg:create <package_name>");
             str_array_free(&args);
@@ -428,7 +448,9 @@ int main(int argc, char **argv) {
         manifest_save(&manifest, dotfiles_dir);
         log_success("Created package directory & manifest for '%s'.", pkg);
         manifest_free(&manifest);
-    } else if (strcmp(cmd, "pkg:remove") == 0 || strcmp(cmd, "package:remove") == 0 || strcmp(cmd, "remove:package") == 0 || strcmp(cmd, "pkg:rm") == 0 || strcmp(cmd, "package:rm") == 0) {
+    } else if (strcmp(cmd, "pkg:remove") == 0 || strcmp(cmd, "package:remove") == 0 ||
+               strcmp(cmd, "remove:package") == 0 || strcmp(cmd, "pkg:rm") == 0 ||
+               strcmp(cmd, "package:rm") == 0) {
         if (args.count < 2) {
             log_error("Usage: stow-manager pkg:remove <package_name>");
             str_array_free(&args);
@@ -437,7 +459,8 @@ int main(int argc, char **argv) {
         for (size_t i = 1; i < args.count; i++) {
             package_remove(dotfiles_dir, target_dir, args.items[i], dry_run);
         }
-    } else if (strcmp(cmd, "pkg:list") == 0 || strcmp(cmd, "package:list") == 0 || strcmp(cmd, "list") == 0) {
+    } else if (strcmp(cmd, "pkg:list") == 0 || strcmp(cmd, "package:list") == 0 ||
+               strcmp(cmd, "list") == 0) {
         list_packages_status(dotfiles_dir, target_dir);
     } else if (strcmp(cmd, "check") == 0) {
         if (args.count > 1) {
@@ -472,8 +495,6 @@ int main(int argc, char **argv) {
             }
             str_array_free(&pkgs);
         }
-    } else if (strcmp(cmd, "list") == 0) {
-        list_packages_status(dotfiles_dir, target_dir);
     } else if (strcmp(cmd, "stow") == 0) {
         if (args.count < 2) {
             log_error("Please specify at least one package name to stow!");

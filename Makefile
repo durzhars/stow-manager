@@ -37,12 +37,33 @@ TEST_OBJS = $(patsubst $(TEST_UNIT_DIR)/%.c,$(BUILD_DIR)/%.o,$(TEST_SRCS)) \
             $(filter-out $(BUILD_DIR)/main.o,$(OBJS))
 TEST_TARGET = $(BIN_DIR)/test_runner
 
-.PHONY: all clean static install test test-feature uninstall
+.PHONY: all clean static install test test-feature uninstall tidy format format-check build-clang-opt build-sanitize
 
 all: $(TARGET)
 
 $(TARGET): $(OBJS) | $(BIN_DIR)
 	$(CC) $(CFLAGS) $(OBJS) -o $(TARGET) $(LDFLAGS)
+
+tidy:
+	clang-tidy $(SRCS) $(TEST_SRCS) -- -Iinclude -Itests/unit -std=c17
+
+format:
+	clang-format -i $(SRCS) $(TEST_SRCS) include/*.h tests/unit/*.h
+
+format-check:
+	clang-format --dry-run --Werror $(SRCS) $(TEST_SRCS) include/*.h tests/unit/*.h
+
+# Compile using Clang with Thin LTO and optimization remarks
+build-clang-opt: CC = clang
+build-clang-opt: CFLAGS += -flto=thin -fsave-optimization-record -Rpass=inline -Rpass-missed=loop-vectorize
+build-clang-opt: LDFLAGS += -flto=thin -fuse-ld=lld
+build-clang-opt: clean $(TARGET)
+
+# Compile using Clang with sanitizers enabled (ASan + UBSan)
+build-sanitize: CC = clang
+build-sanitize: CFLAGS += -fsanitize=address,undefined -fno-omit-frame-pointer -g
+build-sanitize: LDFLAGS += -fsanitize=address,undefined
+build-sanitize: clean $(TARGET)
 
 static: CFLAGS += -static
 static: $(TARGET)
@@ -88,6 +109,7 @@ install: $(TARGET)
 	install -d $(DESTDIR)$(DATADIR)/stow-manager
 	install -m 644 resources/help.md $(DESTDIR)$(DATADIR)/stow-manager/help.md
 	install -m 644 resources/help.txt $(DESTDIR)$(DATADIR)/stow-manager/help.txt
+	install -m 644 resources/stowignore.default $(DESTDIR)$(DATADIR)/stow-manager/stowignore.default
 
 uninstall:
 	rm -f $(DESTDIR)$(BINDIR)/stow-manager

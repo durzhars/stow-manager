@@ -20,10 +20,11 @@
 #define _DEFAULT_SOURCE
 #define _POSIX_C_SOURCE 200809L
 
-#include "test_framework.h"
 #include "../include/scanner.h"
+#include "test_framework.h"
 
-void test_scan_package(void) {
+void test_scan_package(void)
+{
     char tmp_dotfiles[] = "/tmp/stow_scan_pkg_XXXXXX";
     ASSERT(mkdtemp(tmp_dotfiles) != NULL, "Should create temporary dotfiles directory");
 
@@ -53,11 +54,15 @@ void test_scan_package(void) {
 
     PackageManifest manifest;
     manifest_init(&manifest, "scanpkg");
-    ASSERT(manifest_load(&manifest, tmp_dotfiles), "Generated manifest should exist and load successfully");
+    ASSERT(manifest_load(&manifest, tmp_dotfiles),
+           "Generated manifest should exist and load successfully");
 
-    ASSERT(str_array_contains(&manifest.required, "bash"), "Shebang should auto-detect 'bash' as required dependency");
-    ASSERT(str_array_contains(&manifest.optional, "fzf"), "Tool invocation should auto-detect 'fzf' as optional tool");
-    ASSERT(str_array_contains(&manifest.optional, "tmux"), "Tool invocation should auto-detect 'tmux' as optional tool");
+    ASSERT(str_array_contains(&manifest.required, "bash"),
+           "Shebang should auto-detect 'bash' as required dependency");
+    ASSERT(str_array_contains(&manifest.optional, "fzf"),
+           "Tool invocation should auto-detect 'fzf' as optional tool");
+    ASSERT(str_array_contains(&manifest.optional, "tmux"),
+           "Tool invocation should auto-detect 'tmux' as optional tool");
 
     manifest_free(&manifest);
 

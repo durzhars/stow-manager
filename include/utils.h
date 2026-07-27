@@ -26,26 +26,27 @@
 #define _DEFAULT_SOURCE
 #endif
 
+#include "logger.h"
+#include <dirent.h>
+#include <fnmatch.h>
+#include <limits.h>
+#include <signal.h>
+#include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <stdbool.h>
-#include <unistd.h>
 #include <sys/stat.h>
 #include <sys/types.h>
-#include <dirent.h>
-#include <limits.h>
-#include <signal.h>
-#include "logger.h"
+#include <unistd.h>
 
-#define COLOR_RED     "\033[0;31m"
-#define COLOR_GREEN   "\033[0;32m"
-#define COLOR_YELLOW  "\033[1;33m"
-#define COLOR_BLUE    "\033[0;34m"
-#define COLOR_CYAN    "\033[0;36m"
-#define COLOR_WHITE   "\033[1;37m"
-#define COLOR_BOLD    "\033[1m"
-#define COLOR_RESET   "\033[0m"
+#define COLOR_RED "\033[0;31m"
+#define COLOR_GREEN "\033[0;32m"
+#define COLOR_YELLOW "\033[1;33m"
+#define COLOR_BLUE "\033[0;34m"
+#define COLOR_CYAN "\033[0;36m"
+#define COLOR_WHITE "\033[1;37m"
+#define COLOR_BOLD "\033[1m"
+#define COLOR_RESET "\033[0m"
 
 // Async Signal Interrupt Flag
 extern volatile sig_atomic_t g_interrupted;
@@ -81,6 +82,7 @@ bool is_dir(const char *path);
 bool is_symlink(const char *path);
 bool is_executable_in_path(const char *executable);
 char *read_symlink_target(const char *path);
+bool is_symlink_pointing_to(const char *symlink_path, const char *pkg_file_path, const char *real_pkg_file_path);
 void get_distro_id(char *buf, size_t buf_size);
 void normalize_path(char *path);
 void collapse_path(char *path);
@@ -101,11 +103,23 @@ void get_dotfiles_dir(char *buf, size_t buf_size);
 void get_target_dir(char *buf, size_t buf_size);
 void get_all_packages(const char *dotfiles_dir, StringArray *packages);
 
+void parse_stowignore(const char *dir_path, StringArray *ignore_patterns);
+void parse_stowignore_raw(const char *dir_path, StringArray *raw_ignores);
+void get_default_stowignore(StringArray *ignore_patterns);
+bool is_path_ignored(const char *rel_path, const StringArray *raw_ignores);
+
 typedef void (*WalkSymlinkCallback)(const char *symlink_path, void *user_data);
 typedef void (*WalkFileCallback)(const char *file_path, const char *rel_path, void *user_data);
 
-void walk_dir_symlinks(const char *dir_path, int current_depth, int max_depth, WalkSymlinkCallback cb, void *user_data);
-void walk_dir_files(const char *base_dir, const char *current_dir, WalkFileCallback cb, void *user_data);
+void walk_dir_symlinks(const char *dir_path,
+                       int current_depth,
+                       int max_depth,
+                       WalkSymlinkCallback cb,
+                       void *user_data);
+void walk_dir_files(const char *base_dir,
+                    const char *current_dir,
+                    WalkFileCallback cb,
+                    void *user_data);
 
 int run_system_cmd(const char *cmd);
 

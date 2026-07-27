@@ -21,27 +21,36 @@
 #define _POSIX_C_SOURCE 200809L
 #include "registry.h"
 
-static FILE *open_registry_file(const char *dotfiles_dir) {
+static FILE *open_registry_file(const char *dotfiles_dir)
+{
     char path[PATH_MAX * 2];
     snprintf(path, sizeof(path), "%s/stow.registry", dotfiles_dir);
     FILE *fp = fopen(path, "r");
-    if (fp) return fp;
+    if (fp) {
+        return fp;
+    }
 
     snprintf(path, sizeof(path), "%s/.stowregistry", dotfiles_dir);
     fp = fopen(path, "r");
-    if (fp) return fp;
+    if (fp) {
+        return fp;
+    }
 
     char data_home[PATH_MAX];
     get_xdg_data_home(data_home, sizeof(data_home));
     snprintf(path, sizeof(path), "%s/stow-manager/stow.registry", data_home);
     fp = fopen(path, "r");
-    if (fp) return fp;
+    if (fp) {
+        return fp;
+    }
 
     char config_home[PATH_MAX];
     get_xdg_config_home(config_home, sizeof(config_home));
     snprintf(path, sizeof(path), "%s/stow-manager/stow.registry", config_home);
     fp = fopen(path, "r");
-    if (fp) return fp;
+    if (fp) {
+        return fp;
+    }
 
     StringArray data_dirs;
     str_array_init(&data_dirs);
@@ -59,7 +68,8 @@ static FILE *open_registry_file(const char *dotfiles_dir) {
     return NULL;
 }
 
-void registry_get_aliases(const char *dotfiles_dir, const char *tool, StringArray *aliases) {
+void registry_get_aliases(const char *dotfiles_dir, const char *tool, StringArray *aliases)
+{
     FILE *fp = open_registry_file(dotfiles_dir);
     if (!fp) {
         str_array_append(aliases, tool);
@@ -74,7 +84,9 @@ void registry_get_aliases(const char *dotfiles_dir, const char *tool, StringArra
     while ((linelen = getline(&linebuf, &linecap, fp)) != -1) {
         (void)linelen;
         char *trimmed = trim_whitespace(linebuf);
-        if (trimmed[0] == '#' || trimmed[0] == '\0') continue;
+        if (trimmed[0] == '#' || trimmed[0] == '\0') {
+            continue;
+        }
 
         char *eq = strchr(trimmed, '=');
         if (eq) {
@@ -106,11 +118,18 @@ void registry_get_aliases(const char *dotfiles_dir, const char *tool, StringArra
     fclose(fp);
 }
 
-void registry_get_distro_pkg(const char *dotfiles_dir, const char *tool, const char *distro_id, char *pkg_out, size_t pkg_out_size) {
+void registry_get_distro_pkg(const char *dotfiles_dir,
+                             const char *tool,
+                             const char *distro_id,
+                             char *pkg_out,
+                             size_t pkg_out_size)
+{
     snprintf(pkg_out, pkg_out_size, "%s", tool);
 
     FILE *fp = open_registry_file(dotfiles_dir);
-    if (!fp) return;
+    if (!fp) {
+        return;
+    }
 
     char key_distro[256];
     snprintf(key_distro, sizeof(key_distro), "%s@%s", tool, distro_id);
@@ -122,7 +141,9 @@ void registry_get_distro_pkg(const char *dotfiles_dir, const char *tool, const c
     while ((linelen = getline(&linebuf, &linecap, fp)) != -1) {
         (void)linelen;
         char *trimmed = trim_whitespace(linebuf);
-        if (trimmed[0] == '#' || trimmed[0] == '\0') continue;
+        if (trimmed[0] == '#' || trimmed[0] == '\0') {
+            continue;
+        }
 
         char *eq = strchr(trimmed, '=');
         if (eq) {
@@ -141,9 +162,12 @@ void registry_get_distro_pkg(const char *dotfiles_dir, const char *tool, const c
     fclose(fp);
 }
 
-void registry_get_all_tools(const char *dotfiles_dir, StringArray *tools) {
+void registry_get_all_tools(const char *dotfiles_dir, StringArray *tools)
+{
     FILE *fp = open_registry_file(dotfiles_dir);
-    if (!fp) return;
+    if (!fp) {
+        return;
+    }
 
     char *linebuf = NULL;
     size_t linecap = 0;
@@ -152,14 +176,18 @@ void registry_get_all_tools(const char *dotfiles_dir, StringArray *tools) {
     while ((linelen = getline(&linebuf, &linecap, fp)) != -1) {
         (void)linelen;
         char *trimmed = trim_whitespace(linebuf);
-        if (trimmed[0] == '#' || trimmed[0] == '\0') continue;
+        if (trimmed[0] == '#' || trimmed[0] == '\0') {
+            continue;
+        }
 
         char *eq = strchr(trimmed, '=');
         if (eq) {
             *eq = '\0';
             char *key = trim_whitespace(trimmed);
             char *at = strchr(key, '@');
-            if (at) *at = '\0';
+            if (at) {
+                *at = '\0';
+            }
             char *tool = trim_whitespace(key);
             if (strlen(tool) > 0 && !str_array_contains(tools, tool)) {
                 str_array_append(tools, tool);
@@ -171,7 +199,8 @@ void registry_get_all_tools(const char *dotfiles_dir, StringArray *tools) {
     fclose(fp);
 }
 
-bool is_tool_installed_dynamic(const char *dotfiles_dir, const char *tool) {
+bool is_tool_installed_dynamic(const char *dotfiles_dir, const char *tool)
+{
     StringArray aliases;
     str_array_init(&aliases);
     registry_get_aliases(dotfiles_dir, tool, &aliases);

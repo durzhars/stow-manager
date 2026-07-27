@@ -20,10 +20,11 @@
 #define _DEFAULT_SOURCE
 #define _POSIX_C_SOURCE 200809L
 
-#include "test_framework.h"
 #include "../include/utils.h"
+#include "test_framework.h"
 
-void test_trim_whitespace(void) {
+void test_trim_whitespace(void)
+{
     char s1[] = "  hello world  ";
     ASSERT_STR_EQ(trim_whitespace(s1), "hello world");
 
@@ -34,7 +35,8 @@ void test_trim_whitespace(void) {
     ASSERT_STR_EQ(trim_whitespace(s3), "");
 }
 
-void test_string_array(void) {
+void test_string_array(void)
+{
     StringArray arr;
     str_array_init(&arr);
 
@@ -51,7 +53,8 @@ void test_string_array(void) {
     ASSERT(arr.count == 0, "Array count should be 0 after free");
 }
 
-void test_xdg_paths(void) {
+void test_xdg_paths(void)
+{
     char cfg_home[PATH_MAX];
     get_xdg_config_home(cfg_home, sizeof(cfg_home));
     ASSERT(strlen(cfg_home) > 0, "XDG_CONFIG_HOME should not be empty");
@@ -67,7 +70,8 @@ void test_xdg_paths(void) {
     str_array_free(&data_dirs);
 }
 
-void test_safe_allocators(void) {
+void test_safe_allocators(void)
+{
     char *ptr = safe_malloc(100);
     ASSERT(ptr != NULL, "safe_malloc should return non-null pointer");
     strcpy(ptr, "testing safe_malloc");
@@ -81,7 +85,8 @@ void test_safe_allocators(void) {
     free(dup);
 }
 
-void test_normalize_path(void) {
+void test_normalize_path(void)
+{
     // Collapsing duplicate slashes
     char p1[PATH_MAX] = "///home//user///.config";
     normalize_path(p1);
@@ -103,7 +108,8 @@ void test_normalize_path(void) {
     ASSERT_STR_EQ(p4, "/");
 }
 
-void test_collapse_path(void) {
+void test_collapse_path(void)
+{
     // Resolving .. relative path segments
     char p1[PATH_MAX] = "/a/b/../c";
     collapse_path(p1);
@@ -125,7 +131,8 @@ void test_collapse_path(void) {
     ASSERT_STR_EQ(p4, "/a/c");
 }
 
-void test_escape_shell_arg(void) {
+void test_escape_shell_arg(void)
+{
     char dest[256];
 
     // Simple single-word argument wrapping
@@ -146,7 +153,8 @@ void test_escape_shell_arg(void) {
     ASSERT(strlen(small_buf) < sizeof(small_buf), "Buffer must be null-terminated and not overrun");
 }
 
-void test_expand_tilde_path(void) {
+void test_expand_tilde_path(void)
+{
     char out[PATH_MAX];
     const char *home = getenv("HOME");
     ASSERT(home != NULL, "HOME environment variable should be set");
@@ -169,7 +177,8 @@ void test_expand_tilde_path(void) {
     ASSERT_STR_EQ(out, "relative/path");
 }
 
-void test_is_path_prefix(void) {
+void test_is_path_prefix(void)
+{
     // True prefix matches
     ASSERT(is_path_prefix("/home/user/dotfiles/bash", "/home/user/dotfiles"),
            "/home/user/dotfiles should be a prefix of /home/user/dotfiles/bash");
@@ -185,7 +194,8 @@ void test_is_path_prefix(void) {
            "/home/user should NOT be a prefix of /etc/passwd");
 }
 
-void test_mkdir_p(void) {
+void test_mkdir_p(void)
+{
     char tmp_dir[] = "/tmp/stow_mkdir_XXXXXX";
     ASSERT(mkdtemp(tmp_dir) != NULL, "Should create temporary directory for mkdir_p test");
 
@@ -205,7 +215,8 @@ void test_mkdir_p(void) {
     (void)system(rm_cmd);
 }
 
-void test_join_path(void) {
+void test_join_path(void)
+{
     char out[PATH_MAX];
 
     join_path(out, sizeof(out), "/home/user/dotfiles", "hyprland");
@@ -218,14 +229,18 @@ void test_join_path(void) {
     ASSERT_STR_EQ(out, "hyprland");
 }
 
-void test_symlink_helpers(void) {
+void test_symlink_helpers(void)
+{
     char tmp_dir[] = "/tmp/stow_sym_hlp_XXXXXX";
     ASSERT(mkdtemp(tmp_dir) != NULL, "Should create temporary directory for symlink helpers test");
 
     char target_file[PATH_MAX];
     snprintf(target_file, sizeof(target_file), "%s/target.txt", tmp_dir);
     FILE *fp = fopen(target_file, "w");
-    if (fp) { fprintf(fp, "test\n"); fclose(fp); }
+    if (fp) {
+        fprintf(fp, "test\n");
+        fclose(fp);
+    }
 
     ASSERT(file_exists(target_file), "target_file should exist");
     ASSERT(!is_symlink(target_file), "target_file should not be a symlink");
@@ -240,6 +255,102 @@ void test_symlink_helpers(void) {
     ASSERT(sym_target != NULL, "read_symlink_target should return target path");
     ASSERT_STR_EQ(sym_target, target_file);
     free(sym_target);
+
+    char rm_cmd[PATH_MAX * 2];
+    snprintf(rm_cmd, sizeof(rm_cmd), "rm -rf \"%s\"", tmp_dir);
+    (void)system(rm_cmd);
+}
+
+void test_is_executable_in_path(void)
+{
+    // Test relative name search (standard behavior)
+    ASSERT(is_executable_in_path("sh") || is_executable_in_path("bash"),
+           "Should find standard shell executable in PATH");
+
+    // Test non-existent executable
+    ASSERT(!is_executable_in_path("non_existent_executable_12345"),
+           "Should return false for non-existent executable");
+
+    // Test absolute path to executable (RED step)
+    ASSERT(is_executable_in_path("/bin/sh"), "Should detect absolute path to sh as executable");
+}
+
+void test_get_all_packages_skips_dot_dirs(void)
+{
+    char tmp_dir[] = "/tmp/stow_get_pkgs_XXXXXX";
+    ASSERT(mkdtemp(tmp_dir) != NULL, "Should create temporary dotfiles directory");
+
+    char pkg1[PATH_MAX];
+    snprintf(pkg1, sizeof(pkg1), "%s/hyprland", tmp_dir);
+    mkdir(pkg1, 0755);
+
+    char pkg2[PATH_MAX];
+    snprintf(pkg2, sizeof(pkg2), "%s/nvim", tmp_dir);
+    mkdir(pkg2, 0755);
+
+    StringArray pkgs;
+    str_array_init(&pkgs);
+    get_all_packages(tmp_dir, &pkgs);
+
+    ASSERT(!str_array_contains(&pkgs, "."), "get_all_packages must not include '.'");
+    ASSERT(!str_array_contains(&pkgs, ".."), "get_all_packages must not include '..'");
+    ASSERT(str_array_contains(&pkgs, "hyprland"), "get_all_packages should include 'hyprland'");
+    ASSERT(str_array_contains(&pkgs, "nvim"), "get_all_packages should include 'nvim'");
+
+    str_array_free(&pkgs);
+
+    char rm_cmd[PATH_MAX * 2];
+    snprintf(rm_cmd, sizeof(rm_cmd), "rm -rf \"%s\"", tmp_dir);
+    (void)system(rm_cmd);
+}
+
+void test_default_stowignore(void)
+{
+    StringArray defaults;
+    str_array_init(&defaults);
+    get_default_stowignore(&defaults);
+
+    ASSERT(defaults.count > 0, "Default stowignore patterns should be loaded");
+    ASSERT(str_array_contains(&defaults, ".gitignore"), "Should contain .gitignore pattern");
+    ASSERT(str_array_contains(&defaults, ".git"), "Should contain .git pattern");
+
+    ASSERT(is_path_ignored(".config/nvim_lazyvim_backup/.gitignore", &defaults),
+           "Subdirectory .gitignore must be ignored by default patterns");
+    ASSERT(is_path_ignored("README.md", &defaults), "README.md must be ignored by default patterns");
+    ASSERT(is_path_ignored("nested/README.md", &defaults), "nested/README.md must be ignored by default patterns");
+    ASSERT(!is_path_ignored(".config/nvim/init.lua", &defaults), "Normal config file must not be ignored");
+
+    str_array_free(&defaults);
+}
+
+void test_is_symlink_pointing_to(void)
+{
+    char tmp_template[] = "/tmp/stow_sym_pt_XXXXXX";
+    char *tmp_dir = mkdtemp(tmp_template);
+    ASSERT(tmp_dir != NULL, "mkdtemp should succeed");
+
+    char real_target_file[PATH_MAX];
+    snprintf(real_target_file, sizeof(real_target_file), "%s/theme.conf", tmp_dir);
+    FILE *fp = fopen(real_target_file, "w");
+    if (fp) {
+        fprintf(fp, "color=blue\n");
+        fclose(fp);
+    }
+
+    char pkg_symlink_file[PATH_MAX];
+    snprintf(pkg_symlink_file, sizeof(pkg_symlink_file), "%s/current-theme.conf", tmp_dir);
+    symlink("theme.conf", pkg_symlink_file);
+
+    char outer_dir[PATH_MAX];
+    snprintf(outer_dir, sizeof(outer_dir), "%s/outer", tmp_dir);
+    mkdir(outer_dir, 0755);
+
+    char outer_stow_link[PATH_MAX];
+    snprintf(outer_stow_link, sizeof(outer_stow_link), "%s/current-theme.conf", outer_dir);
+    symlink("../current-theme.conf", outer_stow_link);
+
+    ASSERT(is_symlink_pointing_to(outer_stow_link, pkg_symlink_file, NULL),
+           "Relative symlink to internal package symlink file must match");
 
     char rm_cmd[PATH_MAX * 2];
     snprintf(rm_cmd, sizeof(rm_cmd), "rm -rf \"%s\"", tmp_dir);

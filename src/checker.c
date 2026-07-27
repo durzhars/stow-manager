@@ -23,19 +23,33 @@
 #include "registry.h"
 #include <termios.h>
 
-static void flush_stdin(void) {
+static void flush_stdin(void)
+{
     int c;
-    while ((c = getchar()) != '\n' && c != EOF);
+    while ((c = getchar()) != '\n' && c != EOF) {
+        ;
+    }
 }
 
-static void build_install_command(const char *dotfiles_dir, const char *distro, const StringArray *pkgs, char *cmd, size_t cmd_size) {
+static void build_install_command(const char *dotfiles_dir,
+                                  const char *distro,
+                                  const StringArray *pkgs,
+                                  char *cmd,
+                                  size_t cmd_size)
+{
     char pkg_list[2048] = {0};
     size_t offset = 0;
     for (size_t i = 0; i < pkgs->count; i++) {
         char distro_pkg[256];
-        registry_get_distro_pkg(dotfiles_dir, pkgs->items[i], distro, distro_pkg, sizeof(distro_pkg));
-        int written = snprintf(pkg_list + offset, sizeof(pkg_list) - offset, "%s%s",
-                               distro_pkg, (i + 1 < pkgs->count) ? " " : "");
+        registry_get_distro_pkg(
+            dotfiles_dir, pkgs->items[i], distro, distro_pkg, sizeof(distro_pkg));
+        char escaped_pkg[512];
+        escape_shell_arg(distro_pkg, escaped_pkg, sizeof(escaped_pkg));
+        int written = snprintf(pkg_list + offset,
+                               sizeof(pkg_list) - offset,
+                               "%s%s",
+                               escaped_pkg,
+                               (i + 1 < pkgs->count) ? " " : "");
         if (written > 0 && (size_t)written < sizeof(pkg_list) - offset) {
             offset += (size_t)written;
         } else {
@@ -43,11 +57,14 @@ static void build_install_command(const char *dotfiles_dir, const char *distro, 
         }
     }
 
-    if (strcmp(distro, "arch") == 0 || strcmp(distro, "manjaro") == 0 || strcmp(distro, "endeavouros") == 0) {
+    if (strcmp(distro, "arch") == 0 || strcmp(distro, "manjaro") == 0 ||
+        strcmp(distro, "endeavouros") == 0) {
         snprintf(cmd, cmd_size, "sudo pacman -S --needed %s", pkg_list);
-    } else if (strcmp(distro, "ubuntu") == 0 || strcmp(distro, "debian") == 0 || strcmp(distro, "pop") == 0 || strcmp(distro, "mint") == 0) {
+    } else if (strcmp(distro, "ubuntu") == 0 || strcmp(distro, "debian") == 0 ||
+               strcmp(distro, "pop") == 0 || strcmp(distro, "mint") == 0) {
         snprintf(cmd, cmd_size, "sudo apt update && sudo apt install -y %s", pkg_list);
-    } else if (strcmp(distro, "fedora") == 0 || strcmp(distro, "rhel") == 0 || strcmp(distro, "centos") == 0) {
+    } else if (strcmp(distro, "fedora") == 0 || strcmp(distro, "rhel") == 0 ||
+               strcmp(distro, "centos") == 0) {
         snprintf(cmd, cmd_size, "sudo dnf install -y %s", pkg_list);
     } else if (strcmp(distro, "alpine") == 0) {
         snprintf(cmd, cmd_size, "sudo apk add %s", pkg_list);
@@ -58,7 +75,11 @@ static void build_install_command(const char *dotfiles_dir, const char *distro, 
     }
 }
 
-void check_package_dependencies(const char *dotfiles_dir, const char *target_pkg, bool auto_install, bool dry_run) {
+void check_package_dependencies(const char *dotfiles_dir,
+                                const char *target_pkg,
+                                bool auto_install,
+                                bool dry_run)
+{
     char distro[64];
     get_distro_id(distro, sizeof(distro));
 
@@ -66,11 +87,15 @@ void check_package_dependencies(const char *dotfiles_dir, const char *target_pkg
     str_array_init(&all_pkgs);
     get_all_packages(dotfiles_dir, &all_pkgs);
 
-    StringArray missing_req, missing_opt;
+    StringArray missing_req;
+    StringArray missing_opt;
     str_array_init(&missing_req);
     str_array_init(&missing_opt);
 
-    printf("\n%s%s=== Checking Package Dependencies & Optional Plugins ===%s\n\n", COLOR_CYAN, COLOR_BOLD, COLOR_RESET);
+    printf("\n%s%s=== Checking Package Dependencies & Optional Plugins ===%s\n\n",
+           COLOR_CYAN,
+           COLOR_BOLD,
+           COLOR_RESET);
 
     for (size_t i = 0; i < all_pkgs.count; i++) {
         const char *pkg_name = all_pkgs.items[i];
@@ -91,8 +116,15 @@ void check_package_dependencies(const char *dotfiles_dir, const char *target_pkg
                 if (is_tool_installed_dynamic(dotfiles_dir, tool)) {
                     printf("    %s✓%s %s\n", COLOR_GREEN, COLOR_RESET, tool);
                 } else {
-                    printf("    %s✗%s %s %s(REQUIRED MISSING)%s\n", COLOR_RED, COLOR_RESET, tool, COLOR_RED, COLOR_RESET);
-                    if (!str_array_contains(&missing_req, tool)) str_array_append(&missing_req, tool);
+                    printf("    %s✗%s %s %s(REQUIRED MISSING)%s\n",
+                           COLOR_RED,
+                           COLOR_RESET,
+                           tool,
+                           COLOR_RED,
+                           COLOR_RESET);
+                    if (!str_array_contains(&missing_req, tool)) {
+                        str_array_append(&missing_req, tool);
+                    }
                 }
             }
         } else {
@@ -106,8 +138,15 @@ void check_package_dependencies(const char *dotfiles_dir, const char *target_pkg
                 if (is_tool_installed_dynamic(dotfiles_dir, tool)) {
                     printf("    %s✓%s %s\n", COLOR_GREEN, COLOR_RESET, tool);
                 } else {
-                    printf("    %s⚡%s %s %s(optional missing)%s\n", COLOR_YELLOW, COLOR_RESET, tool, COLOR_YELLOW, COLOR_RESET);
-                    if (!str_array_contains(&missing_opt, tool)) str_array_append(&missing_opt, tool);
+                    printf("    %s⚡%s %s %s(optional missing)%s\n",
+                           COLOR_YELLOW,
+                           COLOR_RESET,
+                           tool,
+                           COLOR_YELLOW,
+                           COLOR_RESET);
+                    if (!str_array_contains(&missing_opt, tool)) {
+                        str_array_append(&missing_opt, tool);
+                    }
                 }
             }
         } else {
@@ -122,7 +161,13 @@ void check_package_dependencies(const char *dotfiles_dir, const char *target_pkg
         log_error("Missing REQUIRED dependencies!");
         char install_cmd[4096];
         build_install_command(dotfiles_dir, distro, &missing_req, install_cmd, sizeof(install_cmd));
-        printf("%sInstallation Command (%s):%s %s%s%s\n\n", COLOR_BOLD, distro, COLOR_RESET, COLOR_CYAN, install_cmd, COLOR_RESET);
+        printf("%sInstallation Command (%s):%s %s%s%s\n\n",
+               COLOR_BOLD,
+               distro,
+               COLOR_RESET,
+               COLOR_CYAN,
+               install_cmd,
+               COLOR_RESET);
 
         if (dry_run) {
             log_info("[DRY-RUN] Would prompt/execute installation command: %s", install_cmd);
@@ -132,7 +177,9 @@ void check_package_dependencies(const char *dotfiles_dir, const char *target_pkg
             printf("Would you like to install missing REQUIRED dependencies now? [Y/n] ");
             fflush(stdout);
             int c = getchar();
-            if (c != '\n' && c != EOF) flush_stdin();
+            if (c != '\n' && c != EOF) {
+                flush_stdin();
+            }
             if (c == 'y' || c == 'Y' || c == '\n') {
                 run_system_cmd(install_cmd);
             }
@@ -143,7 +190,13 @@ void check_package_dependencies(const char *dotfiles_dir, const char *target_pkg
         log_warn("Missing OPTIONAL plugins & tools!");
         char install_cmd[4096];
         build_install_command(dotfiles_dir, distro, &missing_opt, install_cmd, sizeof(install_cmd));
-        printf("%sInstallation Command (%s):%s %s%s%s\n\n", COLOR_BOLD, distro, COLOR_RESET, COLOR_CYAN, install_cmd, COLOR_RESET);
+        printf("%sInstallation Command (%s):%s %s%s%s\n\n",
+               COLOR_BOLD,
+               distro,
+               COLOR_RESET,
+               COLOR_CYAN,
+               install_cmd,
+               COLOR_RESET);
 
         if (dry_run) {
             log_info("[DRY-RUN] Would prompt/execute installation command: %s", install_cmd);
@@ -153,7 +206,9 @@ void check_package_dependencies(const char *dotfiles_dir, const char *target_pkg
             printf("Would you like to install missing OPTIONAL plugins & tools now? [y/N] ");
             fflush(stdout);
             int c = getchar();
-            if (c != '\n' && c != EOF) flush_stdin();
+            if (c != '\n' && c != EOF) {
+                flush_stdin();
+            }
             if (c == 'y' || c == 'Y') {
                 run_system_cmd(install_cmd);
             }
@@ -174,14 +229,19 @@ typedef struct {
     size_t broken_count;
 } ScanBrokenContext;
 
-static void scan_broken_cb(const char *symlink_path, void *user_data) {
+static void scan_broken_cb(const char *symlink_path, void *user_data)
+{
     ScanBrokenContext *ctx = (ScanBrokenContext *)user_data;
     char *target = read_symlink_target(symlink_path);
     if (!target || !file_exists(target)) {
-        log_error("Broken symlink inside repo: %s -> %s (target missing)", symlink_path, target ? target : "NULL");
+        log_error("Broken symlink inside repo: %s -> %s (target missing)",
+                  symlink_path,
+                  target ? target : "NULL");
         ctx->broken_count++;
     }
-    if (target) free(target);
+    if (target) {
+        free(target);
+    }
 }
 
 typedef struct {
@@ -189,12 +249,15 @@ typedef struct {
     size_t orphan_count;
 } ScanOrphanContext;
 
-static void scan_orphan_cb(const char *symlink_path, void *user_data) {
+static void scan_orphan_cb(const char *symlink_path, void *user_data)
+{
     ScanOrphanContext *ctx = (ScanOrphanContext *)user_data;
     char *target = read_symlink_target(symlink_path);
     if (target && is_path_prefix(target, ctx->dotfiles_dir)) {
         const char *rel = target + strlen(ctx->dotfiles_dir);
-        if (*rel == '/') rel++;
+        if (*rel == '/') {
+            rel++;
+        }
         const char *slash = strchr(rel, '/');
         if (slash) {
             size_t pkg_len = (size_t)(slash - rel);
@@ -205,20 +268,28 @@ static void scan_orphan_cb(const char *symlink_path, void *user_data) {
                 char pkg_dir[PATH_MAX * 2];
                 join_path(pkg_dir, sizeof(pkg_dir), ctx->dotfiles_dir, pkg_name);
                 if (!is_dir(pkg_dir) || !file_exists(target)) {
-                    log_warn("Unmanaged / Orphan symlink: %s -> %s (target file does not exist)", symlink_path, target);
+                    log_warn("Unmanaged / Orphan symlink: %s -> %s (target file does not exist)",
+                             symlink_path,
+                             target);
                     ctx->orphan_count++;
                 }
             }
         }
     }
-    if (target) free(target);
+    if (target) {
+        free(target);
+    }
 }
 
-void check_symlink_health(const char *dotfiles_dir, const char *target_dir) {
-    printf("\n%s%s=== Scanning Symlink Health & Integrity ===%s\n\n", COLOR_CYAN, COLOR_BOLD, COLOR_RESET);
+void check_symlink_health(const char *dotfiles_dir, const char *target_dir)
+{
+    printf("\n%s%s=== Scanning Symlink Health & Integrity ===%s\n\n",
+           COLOR_CYAN,
+           COLOR_BOLD,
+           COLOR_RESET);
 
     log_info("1. Scanning repo directory '%s' for broken symlinks...", dotfiles_dir);
-    ScanBrokenContext broken_ctx = { dotfiles_dir, 0 };
+    ScanBrokenContext broken_ctx = {dotfiles_dir, 0};
     walk_dir_symlinks(dotfiles_dir, 1, 6, scan_broken_cb, &broken_ctx);
 
     if (broken_ctx.broken_count == 0) {
@@ -229,13 +300,14 @@ void check_symlink_health(const char *dotfiles_dir, const char *target_dir) {
 
     printf("\n");
     log_info("2. Scanning target directory '%s' for unmanaged/orphan symlinks...", target_dir);
-    ScanOrphanContext orphan_ctx = { dotfiles_dir, 0 };
+    ScanOrphanContext orphan_ctx = {dotfiles_dir, 0};
     walk_dir_symlinks(target_dir, 1, 6, scan_orphan_cb, &orphan_ctx);
 
     if (orphan_ctx.orphan_count == 0) {
         log_success("No unmanaged / orphan symlinks pointing to dotfiles repo!");
     } else {
-        log_warn("Found %zu unmanaged / orphan symlink(s) in target directory!", orphan_ctx.orphan_count);
+        log_warn("Found %zu unmanaged / orphan symlink(s) in target directory!",
+                 orphan_ctx.orphan_count);
     }
     printf("\n");
 }

@@ -19,8 +19,8 @@
 #ifndef LOGGER_H
 #define LOGGER_H
 
-#include <stdio.h>
 #include <stdbool.h>
+#include <stdio.h>
 
 typedef enum {
     LOG_LEVEL_DEBUG = 0,

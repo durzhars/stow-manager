@@ -21,28 +21,47 @@
 
 #include "checker.h"
 
-typedef enum {
-    STOW_STATUS_UNSTOWED = 0,
-    STOW_STATUS_PARTIAL,
-    STOW_STATUS_STOWED
-} StowStatus;
+typedef enum { STOW_STATUS_UNSTOWED = 0, STOW_STATUS_PARTIAL, STOW_STATUS_STOWED } StowStatus;
 
-void parse_stowignore(const char *dir_path, StringArray *ignore_patterns);
-void parse_stowignore_raw(const char *dir_path, StringArray *raw_ignores);
-bool is_path_ignored(const char *rel_path, const StringArray *raw_ignores);
+typedef enum {
+    STOW_ACTION_STOW = 0,
+    STOW_ACTION_UNSTOW,
+    STOW_ACTION_RESTOW
+} StowAction;
 
 void unfold_directory_symlinks(const char *target_dir, const char *dotfiles_dir, bool dry_run);
-void prepare_target_conflicts(const char *target_dir, const char *dotfiles_dir, const char *pkg_name, bool dry_run);
+void prepare_target_conflicts(const char *target_dir,
+                              const char *dotfiles_dir,
+                              const char *pkg_name,
+                              bool dry_run);
 
-StowStatus get_package_stow_status(const char *target_dir, const char *dotfiles_dir, const char *pkg_name);
+StowStatus
+get_package_stow_status(const char *target_dir, const char *dotfiles_dir, const char *pkg_name);
 bool is_package_stowed(const char *target_dir, const char *dotfiles_dir, const char *pkg_name);
-void handle_mutual_exclusions(const char *target_dir, const char *dotfiles_dir, const char *pkg_name, bool dry_run);
+void handle_mutual_exclusions(const char *target_dir,
+                              const char *dotfiles_dir,
+                              const char *pkg_name,
+                              bool dry_run);
 
-int stow_package(const char *dotfiles_dir, const char *target_dir, const char *pkg_name, bool auto_install, bool dry_run);
-int unstow_package(const char *dotfiles_dir, const char *target_dir, const char *pkg_name, bool dry_run);
-int restow_package(const char *dotfiles_dir, const char *target_dir, const char *pkg_name, bool auto_install, bool dry_run);
+int stow_package(const char *dotfiles_dir,
+                 const char *target_dir,
+                 const char *pkg_name,
+                 bool auto_install,
+                 bool dry_run);
+int unstow_package(const char *dotfiles_dir,
+                   const char *target_dir,
+                   const char *pkg_name,
+                   bool dry_run);
+int restow_package(const char *dotfiles_dir,
+                   const char *target_dir,
+                   const char *pkg_name,
+                   bool auto_install,
+                   bool dry_run);
 
-void stow_all_packages(const char *dotfiles_dir, const char *target_dir, bool auto_install, bool dry_run);
+void stow_all_packages(const char *dotfiles_dir,
+                       const char *target_dir,
+                       bool auto_install,
+                       bool dry_run);
 void list_packages_status(const char *dotfiles_dir, const char *target_dir);
 
 #endif /* STOW_ENGINE_H */

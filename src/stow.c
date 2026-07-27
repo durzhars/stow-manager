@@ -18,124 +18,13 @@
 
 #define _POSIX_C_SOURCE 200809L
 #include "stow.h"
-#include <time.h>
+
 #include <fnmatch.h>
+#include <time.h>
 
-void parse_stowignore(const char *dir_path, StringArray *ignore_patterns) {
-    if (!dir_path) return;
-    char ignore_file[PATH_MAX * 2];
-    join_path(ignore_file, sizeof(ignore_file), dir_path, ".stowignore");
-
-    FILE *fp = fopen(ignore_file, "r");
-    if (!fp) return;
-
-    char *linebuf = NULL;
-    size_t linecap = 0;
-    ssize_t linelen;
-
-    while ((linelen = getline(&linebuf, &linecap, fp)) != -1) {
-        (void)linelen;
-        char *trimmed = trim_whitespace(linebuf);
-        if (trimmed[0] == '#' || trimmed[0] == '\0') continue;
-
-        char escaped[PATH_MAX * 2];
-        size_t e = 0;
-        for (size_t i = 0; trimmed[i] != '\0' && e + 2 < sizeof(escaped); i++) {
-            if (trimmed[i] == '.') {
-                escaped[e++] = '\\';
-                escaped[e++] = '.';
-            } else if (trimmed[i] == '*') {
-                escaped[e++] = '.';
-                escaped[e++] = '*';
-            } else {
-                escaped[e++] = trimmed[i];
-            }
-        }
-        escaped[e] = '\0';
-
-        if (strlen(escaped) > 0 && !str_array_contains(ignore_patterns, escaped)) {
-            str_array_append(ignore_patterns, escaped);
-        }
-    }
-
-    free(linebuf);
-    fclose(fp);
-}
-
-void parse_stowignore_raw(const char *dir_path, StringArray *raw_ignores) {
-    if (!dir_path) return;
-    char ignore_file[PATH_MAX * 2];
-    join_path(ignore_file, sizeof(ignore_file), dir_path, ".stowignore");
-
-    FILE *fp = fopen(ignore_file, "r");
-    if (!fp) return;
-
-    char *linebuf = NULL;
-    size_t linecap = 0;
-    ssize_t linelen;
-
-    while ((linelen = getline(&linebuf, &linecap, fp)) != -1) {
-        (void)linelen;
-        char *trimmed = trim_whitespace(linebuf);
-        if (trimmed[0] == '#' || trimmed[0] == '\0') continue;
-        if (!str_array_contains(raw_ignores, trimmed)) {
-            str_array_append(raw_ignores, trimmed);
-        }
-    }
-
-    free(linebuf);
-    fclose(fp);
-}
-
-bool is_path_ignored(const char *rel_path, const StringArray *raw_ignores) {
-    if (!rel_path || strlen(rel_path) == 0) return false;
-
-    const char *base = strrchr(rel_path, '/');
-    base = base ? base + 1 : rel_path;
-
-    if (strcmp(base, ".stowdeps") == 0 ||
-        strcmp(base, ".stowignore") == 0 ||
-        strcmp(base, ".git") == 0 ||
-        strcmp(base, ".gitattributes") == 0 ||
-        strcmp(base, ".DS_Store") == 0 ||
-        strcmp(rel_path, ".gitignore") == 0 ||
-        strcmp(rel_path, "README.md") == 0 ||
-        strcmp(rel_path, "LICENSE") == 0) {
-        return true;
-    }
-
-    if (strstr(rel_path, "/.git/") || strstr(rel_path, "/.stowdeps/") || strstr(rel_path, "/.stowignore/")) {
-        return true;
-    }
-
-    if (!raw_ignores) return false;
-
-    for (size_t i = 0; i < raw_ignores->count; i++) {
-        const char *pat = raw_ignores->items[i];
-        if (!pat || strlen(pat) == 0) continue;
-
-        if (fnmatch(pat, rel_path, FNM_PATHNAME) == 0 || fnmatch(pat, base, 0) == 0) {
-            return true;
-        }
-
-        size_t plen = strlen(pat);
-        if (pat[plen - 1] == '/') {
-            char dir_pat[PATH_MAX];
-            snprintf(dir_pat, sizeof(dir_pat), "%.*s", (int)(plen - 1), pat);
-            if (fnmatch(dir_pat, rel_path, FNM_PATHNAME) == 0 ||
-                strncmp(rel_path, pat, plen) == 0 ||
-                strstr(rel_path, pat) != NULL) {
-                return true;
-            }
-        }
-    }
-
-    return false;
-}
-
-static void get_timestamp_str(char *buf, size_t size) {
+static void get_timestamp_str(char* buf, size_t size) {
     time_t now = time(NULL);
-    struct tm *t = localtime(&now);
+    struct tm* t = localtime(&now);
     if (t) {
         strftime(buf, size, "%Y%m%d_%H%M%S", t);
     } else {
@@ -144,39 +33,51 @@ static void get_timestamp_str(char *buf, size_t size) {
 }
 
 typedef struct {
-    const char *dotfiles_dir;
+    const char* dotfiles_dir;
     bool dry_run;
     int unfolded_count;
 } UnfoldContext;
 
-static void unfold_symlink_cb(const char *symlink_path, void *user_data) {
-    UnfoldContext *ctx = (UnfoldContext *)user_data;
+static void unfold_symlink_cb(const char* symlink_path, void* user_data) {
+    UnfoldContext* ctx = (UnfoldContext*)user_data;
     if (is_dir(symlink_path)) {
-        char *target = read_symlink_target(symlink_path);
+        char* target = read_symlink_target(symlink_path);
         if (target && is_path_prefix(target, ctx->dotfiles_dir)) {
             if (ctx->dry_run) {
-                log_warn("[DRY-RUN] Would unfold directory symlink: %s -> %s", symlink_path, target);
+                log_warn("[DRY-RUN] Would unfold directory symlink: %s -> %s",
+                         symlink_path, target);
             } else {
-                log_warn("Unfolding directory symlink: %s -> %s", symlink_path, target);
+                log_warn("Unfolding directory symlink: %s -> %s", symlink_path,
+                         target);
                 char tmp_dir[PATH_MAX * 4];
-                snprintf(tmp_dir, sizeof(tmp_dir), "%s.unfold_tmp_%d", symlink_path, (int)getpid());
+                snprintf(tmp_dir, sizeof(tmp_dir), "%s.unfold_tmp_%d",
+                         symlink_path, (int)getpid());
                 register_temp_path(tmp_dir);
                 if (mkdir_p(tmp_dir, 0755) == 0) {
-                    DIR *tdir = opendir(target);
+                    DIR* tdir = opendir(target);
                     if (tdir) {
-                        struct dirent *entry;
+                        struct dirent* entry;
                         while ((entry = readdir(tdir)) != NULL) {
-                            if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0) continue;
-                            char child_src[PATH_MAX * 2], child_dst[PATH_MAX * 2];
-                            join_path(child_src, sizeof(child_src), target, entry->d_name);
-                            join_path(child_dst, sizeof(child_dst), tmp_dir, entry->d_name);
+                            if (strcmp(entry->d_name, ".") == 0 ||
+                                strcmp(entry->d_name, "..") == 0) {
+                                continue;
+                            }
+                            char child_src[PATH_MAX * 2];
+                            char child_dst[PATH_MAX * 2];
+                            join_path(child_src, sizeof(child_src), target,
+                                      entry->d_name);
+                            join_path(child_dst, sizeof(child_dst), tmp_dir,
+                                      entry->d_name);
                             symlink(child_src, child_dst);
                         }
                         closedir(tdir);
 
                         unlink(symlink_path);
                         if (rename(tmp_dir, symlink_path) != 0) {
-                            log_error("Failed to atomic rename unfolded directory '%s'", tmp_dir);
+                            log_error(
+                                "Failed to atomic rename unfolded directory "
+                                "'%s'",
+                                tmp_dir);
                         }
                     } else {
                         rmdir(tmp_dir);
@@ -186,17 +87,24 @@ static void unfold_symlink_cb(const char *symlink_path, void *user_data) {
             }
             ctx->unfolded_count++;
         }
-        if (target) free(target);
+        if (target) {
+            free(target);
+        }
     }
 }
 
-void unfold_directory_symlinks(const char *target_dir, const char *dotfiles_dir, bool dry_run) {
+void unfold_directory_symlinks(const char* target_dir, const char* dotfiles_dir,
+                               bool dry_run) {
     if (dry_run) {
-        log_info("[DRY-RUN] Scanning for directory symlinks that cause Stow folding conflicts...");
+        log_info(
+            "[DRY-RUN] Scanning for directory symlinks that cause Stow folding "
+            "conflicts...");
     } else {
-        log_info("Scanning for directory symlinks that cause Stow folding conflicts...");
+        log_info(
+            "Scanning for directory symlinks that cause Stow folding "
+            "conflicts...");
     }
-    UnfoldContext ctx = { dotfiles_dir, dry_run, 0 };
+    UnfoldContext ctx = {dotfiles_dir, dry_run, 0};
     walk_dir_symlinks(target_dir, 1, 6, unfold_symlink_cb, &ctx);
     if (ctx.unfolded_count == 0) {
         log_info("No directory symlinks required unfolding.");
@@ -204,10 +112,10 @@ void unfold_directory_symlinks(const char *target_dir, const char *dotfiles_dir,
 }
 
 typedef struct {
-    const char *target_dir;
-    const char *pkg_dir;
-    const char *real_pkg_dir;
-    const StringArray *raw_ignores;
+    const char* target_dir;
+    const char* pkg_dir;
+    const char* real_pkg_dir;
+    const StringArray* raw_ignores;
     bool dry_run;
     size_t new_links;
     size_t replaced_links;
@@ -215,9 +123,10 @@ typedef struct {
     size_t unchanged;
 } ConflictContext;
 
-static void prepare_conflict_cb(const char *file_path, const char *rel_path, void *user_data) {
+static void prepare_conflict_cb(const char* file_path, const char* rel_path,
+                                void* user_data) {
     (void)file_path;
-    ConflictContext *ctx = (ConflictContext *)user_data;
+    ConflictContext* ctx = (ConflictContext*)user_data;
 
     if (is_path_ignored(rel_path, ctx->raw_ignores)) {
         return;
@@ -230,38 +139,41 @@ static void prepare_conflict_cb(const char *file_path, const char *rel_path, voi
     join_path(pkg_file_path, sizeof(pkg_file_path), ctx->pkg_dir, rel_path);
 
     char real_pkg_file_path[PATH_MAX * 2];
-    join_path(real_pkg_file_path, sizeof(real_pkg_file_path), ctx->real_pkg_dir, rel_path);
+    join_path(real_pkg_file_path, sizeof(real_pkg_file_path), ctx->real_pkg_dir,
+              rel_path);
 
     if (is_symlink(target_path)) {
-        char *target = read_symlink_target(target_path);
-        if (target && (strcmp(target, pkg_file_path) == 0 || strcmp(target, real_pkg_file_path) == 0)) {
+        if (is_symlink_pointing_to(target_path, pkg_file_path, real_pkg_file_path)) {
             ctx->unchanged++;
         } else {
             if (ctx->dry_run) {
-                log_info("[DRY-RUN] Would replace symlink: %s -> %s", target_path, pkg_file_path);
+                log_info("[DRY-RUN] Would replace symlink: %s -> %s",
+                         target_path, pkg_file_path);
             } else {
                 unlink(target_path);
             }
             ctx->replaced_links++;
         }
-        if (target) free(target);
     } else if (file_exists(target_path)) {
         char ts[64];
         get_timestamp_str(ts, sizeof(ts));
-        char backup_path[PATH_MAX * 2];
-        snprintf(backup_path, sizeof(backup_path), "%s.stow_backup_%s", target_path, ts);
+        char backup_path[PATH_MAX * 3];
+        snprintf(backup_path, sizeof(backup_path), "%s.stow_backup_%s",
+                 target_path, ts);
 
-        char test_path[PATH_MAX * 2];
+        char test_path[PATH_MAX * 4];
         snprintf(test_path, sizeof(test_path), "%s", backup_path);
         unsigned int counter = 1;
         while (file_exists(test_path)) {
-            snprintf(test_path, sizeof(test_path), "%s.%u", backup_path, counter++);
+            snprintf(test_path, sizeof(test_path), "%s.%u", backup_path,
+                     counter++);
         }
-
         if (ctx->dry_run) {
-            log_warn("[DRY-RUN] Conflict! Would backup file: %s -> %s", target_path, test_path);
+            log_warn("[DRY-RUN] Conflict! Would backup file: %s -> %s",
+                     target_path, test_path);
         } else {
-            log_warn("Conflict! Backing up file: %s -> %s", target_path, test_path);
+            log_warn("Conflict! Backing up file: %s -> %s", target_path,
+                     test_path);
             if (rename(target_path, test_path) != 0) {
                 log_error("Failed to backup conflicting file: %s", target_path);
             }
@@ -269,13 +181,61 @@ static void prepare_conflict_cb(const char *file_path, const char *rel_path, voi
         ctx->backups++;
     } else {
         if (ctx->dry_run) {
-            log_info("[DRY-RUN] Would create symlink: %s -> %s", target_path, pkg_file_path);
+            log_info("[DRY-RUN] Would create symlink: %s -> %s", target_path,
+                     pkg_file_path);
         }
         ctx->new_links++;
     }
 }
 
-void prepare_target_conflicts(const char *target_dir, const char *dotfiles_dir, const char *pkg_name, bool dry_run) {
+static void build_stow_command(const char* dotfiles_dir, const char* target_dir,
+                               const char* pkg_name, StowAction action,
+                               char* out_cmd, size_t out_size) {
+    StringArray ignore_patterns;
+    str_array_init(&ignore_patterns);
+    str_array_append(&ignore_patterns, "\\.stowdeps");
+
+    parse_stowignore(dotfiles_dir, &ignore_patterns);
+
+    char pkg_dir[PATH_MAX * 2];
+    join_path(pkg_dir, sizeof(pkg_dir), dotfiles_dir, pkg_name);
+    parse_stowignore(pkg_dir, &ignore_patterns);
+
+    char ignore_args[4096] = {0};
+    size_t offset = 0;
+    for (size_t i = 0; i < ignore_patterns.count; i++) {
+        char escaped_arg[1024];
+        escape_shell_arg(ignore_patterns.items[i], escaped_arg,
+                         sizeof(escaped_arg));
+        int written =
+            snprintf(ignore_args + offset, sizeof(ignore_args) - offset,
+                     " --ignore=%s", escaped_arg);
+        if (written > 0 && (size_t)written < sizeof(ignore_args) - offset) {
+            offset += (size_t)written;
+        }
+    }
+    str_array_free(&ignore_patterns);
+
+    char escaped_dotfiles[PATH_MAX * 2], escaped_target[PATH_MAX * 2],
+        escaped_pkg[PATH_MAX * 2];
+    escape_shell_arg(dotfiles_dir, escaped_dotfiles, sizeof(escaped_dotfiles));
+    escape_shell_arg(target_dir, escaped_target, sizeof(escaped_target));
+    escape_shell_arg(pkg_name, escaped_pkg, sizeof(escaped_pkg));
+
+    if (action == STOW_ACTION_UNSTOW) {
+        snprintf(out_cmd, out_size, "stow -d %s -t %s%s -v -D %s",
+                 escaped_dotfiles, escaped_target, ignore_args, escaped_pkg);
+    } else if (action == STOW_ACTION_RESTOW) {
+        snprintf(out_cmd, out_size, "stow -d %s -t %s --no-folding%s -v -R %s",
+                 escaped_dotfiles, escaped_target, ignore_args, escaped_pkg);
+    } else {
+        snprintf(out_cmd, out_size, "stow -d %s -t %s --no-folding%s -v -S %s",
+                 escaped_dotfiles, escaped_target, ignore_args, escaped_pkg);
+    }
+}
+
+void prepare_target_conflicts(const char* target_dir, const char* dotfiles_dir,
+                              const char* pkg_name, bool dry_run) {
     char pkg_dir[PATH_MAX * 2];
     join_path(pkg_dir, sizeof(pkg_dir), dotfiles_dir, pkg_name);
 
@@ -285,37 +245,46 @@ void prepare_target_conflicts(const char *target_dir, const char *dotfiles_dir, 
     }
 
     if (dry_run) {
-        log_info("[DRY-RUN] Previewing target paths & conflicts for package '%s'...", pkg_name);
+        log_info(
+            "[DRY-RUN] Previewing target paths & conflicts for package '%s'...",
+            pkg_name);
     }
 
     StringArray raw_ignores;
     str_array_init(&raw_ignores);
+    get_default_stowignore(&raw_ignores);
     parse_stowignore_raw(dotfiles_dir, &raw_ignores);
     parse_stowignore_raw(pkg_dir, &raw_ignores);
 
-    ConflictContext ctx = { target_dir, pkg_dir, real_pkg_dir, &raw_ignores, dry_run, 0, 0, 0, 0 };
+    ConflictContext ctx = {
+        target_dir, pkg_dir, real_pkg_dir, &raw_ignores, dry_run, 0, 0, 0, 0};
     walk_dir_files(pkg_dir, "", prepare_conflict_cb, &ctx);
 
     if (dry_run) {
-        log_info("[DRY-RUN] Summary for '%s': %zu new symlink(s), %zu replaced, %zu backed up, %zu unchanged.",
-                 pkg_name, ctx.new_links, ctx.replaced_links, ctx.backups, ctx.unchanged);
+        log_info(
+            "[DRY-RUN] Summary for '%s': %zu new symlink(s), %zu replaced, %zu "
+            "backed up, %zu "
+            "unchanged.",
+            pkg_name, ctx.new_links, ctx.replaced_links, ctx.backups,
+            ctx.unchanged);
     }
 
     str_array_free(&raw_ignores);
 }
 
 typedef struct {
-    const char *target_dir;
-    const char *pkg_dir;
-    const char *real_pkg_dir;
-    const StringArray *raw_ignores;
+    const char* target_dir;
+    const char* pkg_dir;
+    const char* real_pkg_dir;
+    const StringArray* raw_ignores;
     size_t total_files;
     size_t stowed_files;
 } CheckStowedStatsContext;
 
-static void check_stowed_stats_cb(const char *file_path, const char *rel_path, void *user_data) {
+static void check_stowed_stats_cb(const char* file_path, const char* rel_path,
+                                  void* user_data) {
     (void)file_path;
-    CheckStowedStatsContext *ctx = (CheckStowedStatsContext *)user_data;
+    CheckStowedStatsContext* ctx = (CheckStowedStatsContext*)user_data;
 
     if (is_path_ignored(rel_path, ctx->raw_ignores)) {
         return;
@@ -330,22 +299,25 @@ static void check_stowed_stats_cb(const char *file_path, const char *rel_path, v
     join_path(pkg_file_path, sizeof(pkg_file_path), ctx->pkg_dir, rel_path);
 
     char real_pkg_file_path[PATH_MAX * 2];
-    join_path(real_pkg_file_path, sizeof(real_pkg_file_path), ctx->real_pkg_dir, rel_path);
+    join_path(real_pkg_file_path, sizeof(real_pkg_file_path), ctx->real_pkg_dir,
+              rel_path);
 
     if (is_symlink(target_path)) {
-        char *target = read_symlink_target(target_path);
-        if (target && (strcmp(target, pkg_file_path) == 0 || strcmp(target, real_pkg_file_path) == 0)) {
+        if (is_symlink_pointing_to(target_path, pkg_file_path, real_pkg_file_path)) {
             ctx->stowed_files++;
         }
-        if (target) free(target);
     }
 }
 
-StowStatus get_package_stow_status(const char *target_dir, const char *dotfiles_dir, const char *pkg_name) {
+StowStatus get_package_stow_status(const char* target_dir,
+                                   const char* dotfiles_dir,
+                                   const char* pkg_name) {
     char pkg_dir[PATH_MAX * 2];
     join_path(pkg_dir, sizeof(pkg_dir), dotfiles_dir, pkg_name);
 
-    if (!is_dir(pkg_dir)) return STOW_STATUS_UNSTOWED;
+    if (!is_dir(pkg_dir)) {
+        return STOW_STATUS_UNSTOWED;
+    }
 
     char real_pkg_dir[PATH_MAX * 2];
     if (realpath(pkg_dir, real_pkg_dir) == NULL) {
@@ -354,36 +326,52 @@ StowStatus get_package_stow_status(const char *target_dir, const char *dotfiles_
 
     StringArray raw_ignores;
     str_array_init(&raw_ignores);
+    get_default_stowignore(&raw_ignores);
     parse_stowignore_raw(dotfiles_dir, &raw_ignores);
     parse_stowignore_raw(pkg_dir, &raw_ignores);
 
-    CheckStowedStatsContext ctx = { target_dir, pkg_dir, real_pkg_dir, &raw_ignores, 0, 0 };
+    CheckStowedStatsContext ctx = {target_dir,   pkg_dir, real_pkg_dir,
+                                   &raw_ignores, 0,       0};
     walk_dir_files(pkg_dir, "", check_stowed_stats_cb, &ctx);
     str_array_free(&raw_ignores);
 
-    if (ctx.total_files == 0) return STOW_STATUS_UNSTOWED;
-    if (ctx.stowed_files == ctx.total_files) return STOW_STATUS_STOWED;
-    if (ctx.stowed_files > 0) return STOW_STATUS_PARTIAL;
+    if (ctx.total_files == 0) {
+        return STOW_STATUS_UNSTOWED;
+    }
+    if (ctx.stowed_files == ctx.total_files) {
+        return STOW_STATUS_STOWED;
+    }
+    if (ctx.stowed_files > 0) {
+        return STOW_STATUS_PARTIAL;
+    }
     return STOW_STATUS_UNSTOWED;
 }
 
-bool is_package_stowed(const char *target_dir, const char *dotfiles_dir, const char *pkg_name) {
-    StowStatus status = get_package_stow_status(target_dir, dotfiles_dir, pkg_name);
+bool is_package_stowed(const char* target_dir, const char* dotfiles_dir,
+                       const char* pkg_name) {
+    StowStatus status =
+        get_package_stow_status(target_dir, dotfiles_dir, pkg_name);
     return status == STOW_STATUS_STOWED || status == STOW_STATUS_PARTIAL;
 }
 
-void handle_mutual_exclusions(const char *target_dir, const char *dotfiles_dir, const char *pkg_name, bool dry_run) {
+void handle_mutual_exclusions(const char* target_dir, const char* dotfiles_dir,
+                              const char* pkg_name, bool dry_run) {
     PackageManifest manifest;
     manifest_init(&manifest, pkg_name);
     manifest_load(&manifest, dotfiles_dir);
 
     for (size_t i = 0; i < manifest.conflicts.count; i++) {
-        const char *conflict_pkg = manifest.conflicts.items[i];
+        const char* conflict_pkg = manifest.conflicts.items[i];
         if (is_package_stowed(target_dir, dotfiles_dir, conflict_pkg)) {
             if (dry_run) {
-                log_warn("[DRY-RUN] Would unstow conflicting package '%s' before stowing '%s'.", conflict_pkg, pkg_name);
+                log_warn(
+                    "[DRY-RUN] Would unstow conflicting package '%s' before "
+                    "stowing '%s'.",
+                    conflict_pkg, pkg_name);
             } else {
-                log_warn("Unstowing conflicting package '%s' before stowing '%s'...", conflict_pkg, pkg_name);
+                log_warn(
+                    "Unstowing conflicting package '%s' before stowing '%s'...",
+                    conflict_pkg, pkg_name);
                 unstow_package(dotfiles_dir, target_dir, conflict_pkg, dry_run);
             }
         }
@@ -392,9 +380,11 @@ void handle_mutual_exclusions(const char *target_dir, const char *dotfiles_dir, 
     manifest_free(&manifest);
 }
 
-int stow_package(const char *dotfiles_dir, const char *target_dir, const char *pkg_name, bool auto_install, bool dry_run) {
+int stow_package(const char* dotfiles_dir, const char* target_dir,
+                 const char* pkg_name, bool auto_install, bool dry_run) {
     if (dry_run) {
-        log_info("[DRY-RUN] Previewing stow operation for package '%s'...", pkg_name);
+        log_info("[DRY-RUN] Previewing stow operation for package '%s'...",
+                 pkg_name);
     } else {
         log_info("Stowing package '%s'...", pkg_name);
     }
@@ -404,40 +394,16 @@ int stow_package(const char *dotfiles_dir, const char *target_dir, const char *p
     unfold_directory_symlinks(target_dir, dotfiles_dir, dry_run);
     prepare_target_conflicts(target_dir, dotfiles_dir, pkg_name, dry_run);
 
-    StringArray ignore_patterns;
-    str_array_init(&ignore_patterns);
-    str_array_append(&ignore_patterns, "\\.stowdeps");
-
-    parse_stowignore(dotfiles_dir, &ignore_patterns);
-
-    char pkg_dir[PATH_MAX * 2];
-    join_path(pkg_dir, sizeof(pkg_dir), dotfiles_dir, pkg_name);
-    parse_stowignore(pkg_dir, &ignore_patterns);
-
-    char ignore_args[4096] = {0};
-    size_t offset = 0;
-    for (size_t i = 0; i < ignore_patterns.count; i++) {
-        char escaped_arg[1024];
-        escape_shell_arg(ignore_patterns.items[i], escaped_arg, sizeof(escaped_arg));
-        int written = snprintf(ignore_args + offset, sizeof(ignore_args) - offset, " --ignore=%s", escaped_arg);
-        if (written > 0 && (size_t)written < sizeof(ignore_args) - offset) {
-            offset += (size_t)written;
-        }
-    }
-    str_array_free(&ignore_patterns);
-
-    char escaped_dotfiles[PATH_MAX * 2], escaped_target[PATH_MAX * 2], escaped_pkg[PATH_MAX * 2];
-    escape_shell_arg(dotfiles_dir, escaped_dotfiles, sizeof(escaped_dotfiles));
-    escape_shell_arg(target_dir, escaped_target, sizeof(escaped_target));
-    escape_shell_arg(pkg_name, escaped_pkg, sizeof(escaped_pkg));
-
     char stow_cmd[PATH_MAX * 8];
-    snprintf(stow_cmd, sizeof(stow_cmd), "stow -d %s -t %s --no-folding%s -v -R %s",
-             escaped_dotfiles, escaped_target, ignore_args, escaped_pkg);
+    build_stow_command(dotfiles_dir, target_dir, pkg_name, STOW_ACTION_STOW,
+                       stow_cmd, sizeof(stow_cmd));
 
     if (dry_run) {
         log_info("[DRY-RUN] Would execute Stow command: %s", stow_cmd);
-        log_success("[DRY-RUN] Dry run / Diff complete for package '%s'. No changes were made to disk.", pkg_name);
+        log_success(
+            "[DRY-RUN] Dry run / Diff complete for package '%s'. No changes "
+            "were made to disk.",
+            pkg_name);
         return 0;
     }
 
@@ -446,52 +412,31 @@ int stow_package(const char *dotfiles_dir, const char *target_dir, const char *p
     if (status == 0) {
         log_success("Successfully stowed package '%s'!", pkg_name);
     } else {
-        log_error("Failed to stow package '%s' (stow returned status %d)", pkg_name, status);
+        log_error("Failed to stow package '%s' (stow returned status %d)",
+                  pkg_name, status);
     }
     return status;
 }
 
-int unstow_package(const char *dotfiles_dir, const char *target_dir, const char *pkg_name, bool dry_run) {
+int unstow_package(const char* dotfiles_dir, const char* target_dir,
+                   const char* pkg_name, bool dry_run) {
     if (dry_run) {
-        log_info("[DRY-RUN] Previewing unstow operation for package '%s'...", pkg_name);
+        log_info("[DRY-RUN] Previewing unstow operation for package '%s'...",
+                 pkg_name);
     } else {
         log_info("Unstowing package '%s'...", pkg_name);
     }
 
-    StringArray ignore_patterns;
-    str_array_init(&ignore_patterns);
-    str_array_append(&ignore_patterns, "\\.stowdeps");
-
-    parse_stowignore(dotfiles_dir, &ignore_patterns);
-
-    char pkg_dir[PATH_MAX * 2];
-    join_path(pkg_dir, sizeof(pkg_dir), dotfiles_dir, pkg_name);
-    parse_stowignore(pkg_dir, &ignore_patterns);
-
-    char ignore_args[4096] = {0};
-    size_t offset = 0;
-    for (size_t i = 0; i < ignore_patterns.count; i++) {
-        char escaped_arg[1024];
-        escape_shell_arg(ignore_patterns.items[i], escaped_arg, sizeof(escaped_arg));
-        int written = snprintf(ignore_args + offset, sizeof(ignore_args) - offset, " --ignore=%s", escaped_arg);
-        if (written > 0 && (size_t)written < sizeof(ignore_args) - offset) {
-            offset += (size_t)written;
-        }
-    }
-    str_array_free(&ignore_patterns);
-
-    char escaped_dotfiles[PATH_MAX * 2], escaped_target[PATH_MAX * 2], escaped_pkg[PATH_MAX * 2];
-    escape_shell_arg(dotfiles_dir, escaped_dotfiles, sizeof(escaped_dotfiles));
-    escape_shell_arg(target_dir, escaped_target, sizeof(escaped_target));
-    escape_shell_arg(pkg_name, escaped_pkg, sizeof(escaped_pkg));
-
     char stow_cmd[PATH_MAX * 8];
-    snprintf(stow_cmd, sizeof(stow_cmd), "stow -d %s -t %s%s -v -D %s",
-             escaped_dotfiles, escaped_target, ignore_args, escaped_pkg);
+    build_stow_command(dotfiles_dir, target_dir, pkg_name, STOW_ACTION_UNSTOW,
+                       stow_cmd, sizeof(stow_cmd));
 
     if (dry_run) {
         log_info("[DRY-RUN] Would execute Stow command: %s", stow_cmd);
-        log_success("[DRY-RUN] Dry run / Diff complete for package '%s'. No changes were made to disk.", pkg_name);
+        log_success(
+            "[DRY-RUN] Dry run / Diff complete for package '%s'. No changes "
+            "were made to disk.",
+            pkg_name);
         return 0;
     }
 
@@ -500,49 +445,84 @@ int unstow_package(const char *dotfiles_dir, const char *target_dir, const char 
     if (status == 0) {
         log_success("Successfully unstowed package '%s'!", pkg_name);
     } else {
-        log_error("Failed to unstow package '%s' (stow returned status %d)", pkg_name, status);
+        log_error("Failed to unstow package '%s' (stow returned status %d)",
+                  pkg_name, status);
     }
     return status;
 }
 
-int restow_package(const char *dotfiles_dir, const char *target_dir, const char *pkg_name, bool auto_install, bool dry_run) {
+int restow_package(const char* dotfiles_dir, const char* target_dir,
+                   const char* pkg_name, bool auto_install, bool dry_run) {
     if (dry_run) {
         log_info("[DRY-RUN] Restowing package '%s'...", pkg_name);
     } else {
         log_info("Restowing package '%s'...", pkg_name);
     }
-    unstow_package(dotfiles_dir, target_dir, pkg_name, dry_run);
-    return stow_package(dotfiles_dir, target_dir, pkg_name, auto_install, dry_run);
+
+    check_package_dependencies(dotfiles_dir, pkg_name, auto_install, dry_run);
+    handle_mutual_exclusions(target_dir, dotfiles_dir, pkg_name, dry_run);
+    unfold_directory_symlinks(target_dir, dotfiles_dir, dry_run);
+    prepare_target_conflicts(target_dir, dotfiles_dir, pkg_name, dry_run);
+
+    char stow_cmd[PATH_MAX * 8];
+    build_stow_command(dotfiles_dir, target_dir, pkg_name, STOW_ACTION_RESTOW,
+                       stow_cmd, sizeof(stow_cmd));
+
+    if (dry_run) {
+        log_info("[DRY-RUN] Would execute Stow command: %s", stow_cmd);
+        log_success(
+            "[DRY-RUN] Dry run / Diff complete for package '%s'. No changes "
+            "were made to disk.",
+            pkg_name);
+        return 0;
+    }
+
+    log_info("Executing: %s", stow_cmd);
+    int status = run_system_cmd(stow_cmd);
+    if (status == 0) {
+        log_success("Successfully restowed package '%s'!", pkg_name);
+    } else {
+        log_error("Failed to restow package '%s' (stow returned status %d)",
+                  pkg_name, status);
+    }
+    return status;
 }
 
-void stow_all_packages(const char *dotfiles_dir, const char *target_dir, bool auto_install, bool dry_run) {
+void stow_all_packages(const char* dotfiles_dir, const char* target_dir,
+                       bool auto_install, bool dry_run) {
     StringArray packages;
     str_array_init(&packages);
     get_all_packages(dotfiles_dir, &packages);
 
     if (dry_run) {
-        log_info("[DRY-RUN] Previewing stow operation for ALL packages (%zu found)...", packages.count);
+        log_info(
+            "[DRY-RUN] Previewing stow operation for ALL packages (%zu "
+            "found)...",
+            packages.count);
     } else {
         log_info("Stowing ALL packages (%zu found)...", packages.count);
     }
 
     for (size_t i = 0; i < packages.count; i++) {
-        stow_package(dotfiles_dir, target_dir, packages.items[i], auto_install, dry_run);
+        stow_package(dotfiles_dir, target_dir, packages.items[i], auto_install,
+                     dry_run);
     }
 
     str_array_free(&packages);
 }
 
-void list_packages_status(const char *dotfiles_dir, const char *target_dir) {
+void list_packages_status(const char* dotfiles_dir, const char* target_dir) {
     StringArray packages;
     str_array_init(&packages);
     get_all_packages(dotfiles_dir, &packages);
 
-    printf("\n%s%s=== Stow Packages Status ===%s\n\n", COLOR_CYAN, COLOR_BOLD, COLOR_RESET);
+    printf("\n%s%s=== Stow Packages Status ===%s\n\n", COLOR_CYAN, COLOR_BOLD,
+           COLOR_RESET);
 
     for (size_t i = 0; i < packages.count; i++) {
-        const char *pkg = packages.items[i];
-        StowStatus status = get_package_stow_status(target_dir, dotfiles_dir, pkg);
+        const char* pkg = packages.items[i];
+        StowStatus status =
+            get_package_stow_status(target_dir, dotfiles_dir, pkg);
         if (status == STOW_STATUS_STOWED) {
             printf("  %s[STOWED]%s   %s\n", COLOR_GREEN, COLOR_RESET, pkg);
         } else if (status == STOW_STATUS_PARTIAL) {

@@ -20,10 +20,11 @@
 #define _DEFAULT_SOURCE
 #define _POSIX_C_SOURCE 200809L
 
-#include "test_framework.h"
 #include "../include/registry.h"
+#include "test_framework.h"
 
-void test_registry_parsing(void) {
+void test_registry_parsing(void)
+{
     char tmp_dir[] = "/tmp/stow_reg_XXXXXX";
     ASSERT(mkdtemp(tmp_dir) != NULL, "Should create temporary test directory");
 

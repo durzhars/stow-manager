@@ -38,6 +38,10 @@ void test_is_path_prefix(void);
 void test_mkdir_p(void);
 void test_join_path(void);
 void test_symlink_helpers(void);
+void test_is_executable_in_path(void);
+void test_get_all_packages_skips_dot_dirs(void);
+void test_default_stowignore(void);
+void test_is_symlink_pointing_to(void);
 
 /* Prototypes from test_manifest.c */
 void test_manifest_load_save(void);
@@ -65,7 +69,8 @@ void test_scan_package(void);
 /* Prototypes from test_registry.c */
 void test_registry_parsing(void);
 
-int main(void) {
+int main(void)
+{
     printf("\n=== Running Dotfiles Stow Manager C Unit Tests ===\n\n");
 
     // test_utils.c
@@ -81,6 +86,10 @@ int main(void) {
     RUN_TEST(test_mkdir_p);
     RUN_TEST(test_join_path);
     RUN_TEST(test_symlink_helpers);
+    RUN_TEST(test_is_executable_in_path);
+    RUN_TEST(test_get_all_packages_skips_dot_dirs);
+    RUN_TEST(test_default_stowignore);
+    RUN_TEST(test_is_symlink_pointing_to);
 
     // test_manifest.c
     RUN_TEST(test_manifest_load_save);
@@ -109,7 +118,8 @@ int main(void) {
     RUN_TEST(test_registry_parsing);
 
     printf("\n=== Test Results: %d Passed, %d Failed ===\n\n",
-           g_tests_run - g_tests_failed, g_tests_failed);
+           g_tests_run - g_tests_failed,
+           g_tests_failed);
 
     return g_tests_failed == 0 ? 0 : 1;
 }

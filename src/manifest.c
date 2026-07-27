@@ -22,10 +22,15 @@
 #include "manifest.h"
 #include "stow.h"
 
-static void parse_space_delimited(const char *str, StringArray *arr) {
-    if (!str) return;
+static void parse_space_delimited(const char *str, StringArray *arr)
+{
+    if (!str) {
+        return;
+    }
     char *copy = strdup(str);
-    if (!copy) return;
+    if (!copy) {
+        return;
+    }
 
     char *saveptr = NULL;
     char *token = strtok_r(copy, " \t\r\n", &saveptr);
@@ -36,14 +41,16 @@ static void parse_space_delimited(const char *str, StringArray *arr) {
     free(copy);
 }
 
-void manifest_init(PackageManifest *manifest, const char *pkg_name) {
+void manifest_init(PackageManifest *manifest, const char *pkg_name)
+{
     manifest->package_name = strdup(pkg_name);
     str_array_init(&manifest->required);
     str_array_init(&manifest->optional);
     str_array_init(&manifest->conflicts);
 }
 
-bool manifest_load(PackageManifest *manifest, const char *dotfiles_dir) {
+bool manifest_load(PackageManifest *manifest, const char *dotfiles_dir)
+{
     char pkg_dir[PATH_MAX * 2];
     join_path(pkg_dir, sizeof(pkg_dir), dotfiles_dir, manifest->package_name);
 
@@ -51,7 +58,9 @@ bool manifest_load(PackageManifest *manifest, const char *dotfiles_dir) {
     join_path(path, sizeof(path), pkg_dir, ".stowdeps");
 
     FILE *fp = fopen(path, "r");
-    if (!fp) return false;
+    if (!fp) {
+        return false;
+    }
 
     char *linebuf = NULL;
     size_t linecap = 0;
@@ -60,7 +69,9 @@ bool manifest_load(PackageManifest *manifest, const char *dotfiles_dir) {
     while ((linelen = getline(&linebuf, &linecap, fp)) != -1) {
         (void)linelen;
         char *trimmed = trim_whitespace(linebuf);
-        if (trimmed[0] == '#' || trimmed[0] == '\0') continue;
+        if (trimmed[0] == '#' || trimmed[0] == '\0') {
+            continue;
+        }
 
         char *eq = strchr(trimmed, '=');
         if (eq) {
@@ -83,7 +94,8 @@ bool manifest_load(PackageManifest *manifest, const char *dotfiles_dir) {
     return true;
 }
 
-bool manifest_save(const PackageManifest *manifest, const char *dotfiles_dir) {
+bool manifest_save(const PackageManifest *manifest, const char *dotfiles_dir)
+{
     char pkg_dir[PATH_MAX * 2];
     join_path(pkg_dir, sizeof(pkg_dir), dotfiles_dir, manifest->package_name);
     mkdir_p(pkg_dir, 0755);
@@ -92,25 +104,32 @@ bool manifest_save(const PackageManifest *manifest, const char *dotfiles_dir) {
     join_path(path, sizeof(path), pkg_dir, ".stowdeps");
 
     FILE *fp = fopen(path, "w");
-    if (!fp) return false;
+    if (!fp) {
+        return false;
+    }
 
     fprintf(fp, "# Package Dependency Manifest for '%s'\n", manifest->package_name);
 
     fprintf(fp, "REQUIRED=\"");
     for (size_t i = 0; i < manifest->required.count; i++) {
-        fprintf(fp, "%s%s", manifest->required.items[i], (i + 1 < manifest->required.count) ? " " : "");
+        fprintf(
+            fp, "%s%s", manifest->required.items[i], (i + 1 < manifest->required.count) ? " " : "");
     }
     fprintf(fp, "\"\n");
 
     fprintf(fp, "OPTIONAL=\"");
     for (size_t i = 0; i < manifest->optional.count; i++) {
-        fprintf(fp, "%s%s", manifest->optional.items[i], (i + 1 < manifest->optional.count) ? " " : "");
+        fprintf(
+            fp, "%s%s", manifest->optional.items[i], (i + 1 < manifest->optional.count) ? " " : "");
     }
     fprintf(fp, "\"\n");
 
     fprintf(fp, "CONFLICTS=\"");
     for (size_t i = 0; i < manifest->conflicts.count; i++) {
-        fprintf(fp, "%s%s", manifest->conflicts.items[i], (i + 1 < manifest->conflicts.count) ? " " : "");
+        fprintf(fp,
+                "%s%s",
+                manifest->conflicts.items[i],
+                (i + 1 < manifest->conflicts.count) ? " " : "");
     }
     fprintf(fp, "\"\n");
 
@@ -118,25 +137,34 @@ bool manifest_save(const PackageManifest *manifest, const char *dotfiles_dir) {
     return true;
 }
 
-void manifest_free(PackageManifest *manifest) {
-    if (!manifest) return;
+void manifest_free(PackageManifest *manifest)
+{
+    if (!manifest) {
+        return;
+    }
     free(manifest->package_name);
     str_array_free(&manifest->required);
     str_array_free(&manifest->optional);
     str_array_free(&manifest->conflicts);
 }
 
-void manifest_add_dep(const char *dotfiles_dir, const char *pkg_name, const char *dep, const char *type) {
+void manifest_add_dep(const char *dotfiles_dir,
+                      const char *pkg_name,
+                      const char *dep,
+                      const char *type)
+{
     PackageManifest manifest;
     manifest_init(&manifest, pkg_name);
     manifest_load(&manifest, dotfiles_dir);
 
-    if (type && (strcmp(type, "--required") == 0 || strcmp(type, "-r") == 0 || strcmp(type, "required") == 0)) {
+    if (type && (strcmp(type, "--required") == 0 || strcmp(type, "-r") == 0 ||
+                 strcmp(type, "required") == 0)) {
         if (!str_array_contains(&manifest.required, dep)) {
             str_array_append(&manifest.required, dep);
             log_success("Added '%s' as REQUIRED dependency for package '%s'.", dep, pkg_name);
         }
-    } else if (type && (strcmp(type, "--conflict") == 0 || strcmp(type, "-c") == 0 || strcmp(type, "conflict") == 0)) {
+    } else if (type && (strcmp(type, "--conflict") == 0 || strcmp(type, "-c") == 0 ||
+                        strcmp(type, "conflict") == 0)) {
         if (!str_array_contains(&manifest.conflicts, dep)) {
             str_array_append(&manifest.conflicts, dep);
             log_success("Added '%s' as CONFLICT entry for package '%s'.", dep, pkg_name);
@@ -152,38 +180,57 @@ void manifest_add_dep(const char *dotfiles_dir, const char *pkg_name, const char
     manifest_free(&manifest);
 }
 
-void manifest_edit_dep(const char *dotfiles_dir, const char *pkg_name, const char *dep, const char *new_type) {
-    PackageManifest manifest;
-    manifest_init(&manifest, pkg_name);
-    manifest_load(&manifest, dotfiles_dir);
-
-    StringArray new_req, new_opt, new_cnf;
+static void manifest_remove_dep_from_all(PackageManifest *manifest, const char *dep)
+{
+    StringArray new_req;
+    StringArray new_opt;
+    StringArray new_cnf;
     str_array_init(&new_req);
     str_array_init(&new_opt);
     str_array_init(&new_cnf);
 
-    for (size_t i = 0; i < manifest.required.count; i++) {
-        if (strcmp(manifest.required.items[i], dep) != 0) str_array_append(&new_req, manifest.required.items[i]);
+    for (size_t i = 0; i < manifest->required.count; i++) {
+        if (strcmp(manifest->required.items[i], dep) != 0) {
+            str_array_append(&new_req, manifest->required.items[i]);
+        }
     }
-    for (size_t i = 0; i < manifest.optional.count; i++) {
-        if (strcmp(manifest.optional.items[i], dep) != 0) str_array_append(&new_opt, manifest.optional.items[i]);
+    for (size_t i = 0; i < manifest->optional.count; i++) {
+        if (strcmp(manifest->optional.items[i], dep) != 0) {
+            str_array_append(&new_opt, manifest->optional.items[i]);
+        }
     }
-    for (size_t i = 0; i < manifest.conflicts.count; i++) {
-        if (strcmp(manifest.conflicts.items[i], dep) != 0) str_array_append(&new_cnf, manifest.conflicts.items[i]);
+    for (size_t i = 0; i < manifest->conflicts.count; i++) {
+        if (strcmp(manifest->conflicts.items[i], dep) != 0) {
+            str_array_append(&new_cnf, manifest->conflicts.items[i]);
+        }
     }
 
-    str_array_free(&manifest.required);
-    str_array_free(&manifest.optional);
-    str_array_free(&manifest.conflicts);
+    str_array_free(&manifest->required);
+    str_array_free(&manifest->optional);
+    str_array_free(&manifest->conflicts);
 
-    manifest.required = new_req;
-    manifest.optional = new_opt;
-    manifest.conflicts = new_cnf;
+    manifest->required = new_req;
+    manifest->optional = new_opt;
+    manifest->conflicts = new_cnf;
+}
 
-    if (new_type && (strcmp(new_type, "--required") == 0 || strcmp(new_type, "-r") == 0 || strcmp(new_type, "required") == 0)) {
+void manifest_edit_dep(const char *dotfiles_dir,
+                       const char *pkg_name,
+                       const char *dep,
+                       const char *new_type)
+{
+    PackageManifest manifest;
+    manifest_init(&manifest, pkg_name);
+    manifest_load(&manifest, dotfiles_dir);
+
+    manifest_remove_dep_from_all(&manifest, dep);
+
+    if (new_type && (strcmp(new_type, "--required") == 0 || strcmp(new_type, "-r") == 0 ||
+                     strcmp(new_type, "required") == 0)) {
         str_array_append(&manifest.required, dep);
         log_success("Updated '%s' to REQUIRED for package '%s'.", dep, pkg_name);
-    } else if (new_type && (strcmp(new_type, "--conflict") == 0 || strcmp(new_type, "-c") == 0 || strcmp(new_type, "conflict") == 0)) {
+    } else if (new_type && (strcmp(new_type, "--conflict") == 0 || strcmp(new_type, "-c") == 0 ||
+                            strcmp(new_type, "conflict") == 0)) {
         str_array_append(&manifest.conflicts, dep);
         log_success("Updated '%s' to CONFLICT for package '%s'.", dep, pkg_name);
     } else {
@@ -195,40 +242,21 @@ void manifest_edit_dep(const char *dotfiles_dir, const char *pkg_name, const cha
     manifest_free(&manifest);
 }
 
-void manifest_remove_dep(const char *dotfiles_dir, const char *pkg_name, const char *dep) {
+void manifest_remove_dep(const char *dotfiles_dir, const char *pkg_name, const char *dep)
+{
     PackageManifest manifest;
     manifest_init(&manifest, pkg_name);
     manifest_load(&manifest, dotfiles_dir);
 
-    StringArray new_req, new_opt, new_cnf;
-    str_array_init(&new_req);
-    str_array_init(&new_opt);
-    str_array_init(&new_cnf);
-
-    for (size_t i = 0; i < manifest.required.count; i++) {
-        if (strcmp(manifest.required.items[i], dep) != 0) str_array_append(&new_req, manifest.required.items[i]);
-    }
-    for (size_t i = 0; i < manifest.optional.count; i++) {
-        if (strcmp(manifest.optional.items[i], dep) != 0) str_array_append(&new_opt, manifest.optional.items[i]);
-    }
-    for (size_t i = 0; i < manifest.conflicts.count; i++) {
-        if (strcmp(manifest.conflicts.items[i], dep) != 0) str_array_append(&new_cnf, manifest.conflicts.items[i]);
-    }
-
-    str_array_free(&manifest.required);
-    str_array_free(&manifest.optional);
-    str_array_free(&manifest.conflicts);
-
-    manifest.required = new_req;
-    manifest.optional = new_opt;
-    manifest.conflicts = new_cnf;
+    manifest_remove_dep_from_all(&manifest, dep);
 
     manifest_save(&manifest, dotfiles_dir);
     log_success("Removed '%s' from package '%s'.", dep, pkg_name);
     manifest_free(&manifest);
 }
 
-void manifest_show(const char *dotfiles_dir, const char *pkg_name) {
+void manifest_show(const char *dotfiles_dir, const char *pkg_name)
+{
     char pkg_dir[PATH_MAX * 2];
     join_path(pkg_dir, sizeof(pkg_dir), dotfiles_dir, pkg_name);
     char path[PATH_MAX * 4];
@@ -239,7 +267,11 @@ void manifest_show(const char *dotfiles_dir, const char *pkg_name) {
         return;
     }
 
-    printf("\n%s%s=== Manifest [.stowdeps] for '%s' ===%s\n\n", COLOR_CYAN, COLOR_BOLD, pkg_name, COLOR_RESET);
+    printf("\n%s%s=== Manifest [.stowdeps] for '%s' ===%s\n\n",
+           COLOR_CYAN,
+           COLOR_BOLD,
+           pkg_name,
+           COLOR_RESET);
     FILE *fp = fopen(path, "r");
     if (fp) {
         char line[512];
@@ -251,7 +283,11 @@ void manifest_show(const char *dotfiles_dir, const char *pkg_name) {
     printf("\n");
 }
 
-void package_remove(const char *dotfiles_dir, const char *target_dir, const char *pkg_name, bool dry_run) {
+void package_remove(const char *dotfiles_dir,
+                    const char *target_dir,
+                    const char *pkg_name,
+                    bool dry_run)
+{
     char pkg_dir[PATH_MAX * 2];
     join_path(pkg_dir, sizeof(pkg_dir), dotfiles_dir, pkg_name);
 
@@ -263,7 +299,8 @@ void package_remove(const char *dotfiles_dir, const char *target_dir, const char
     StowStatus status = get_package_stow_status(target_dir, dotfiles_dir, pkg_name);
     if (status != STOW_STATUS_UNSTOWED) {
         if (dry_run) {
-            log_warn("[DRY-RUN] Package '%s' is currently stowed. Would unstow before removing.", pkg_name);
+            log_warn("[DRY-RUN] Package '%s' is currently stowed. Would unstow before removing.",
+                     pkg_name);
         } else {
             log_warn("Package '%s' is stowed. Unstowing package prior to removal...", pkg_name);
             unstow_package(dotfiles_dir, target_dir, pkg_name, dry_run);
@@ -277,8 +314,10 @@ void package_remove(const char *dotfiles_dir, const char *target_dir, const char
     }
 
     log_warn("Removing package directory '%s'...", pkg_dir);
-    char rm_cmd[PATH_MAX * 2 + 32];
-    snprintf(rm_cmd, sizeof(rm_cmd), "rm -rf \"%s\"", pkg_dir);
+    char escaped_pkg_dir[PATH_MAX * 3];
+    escape_shell_arg(pkg_dir, escaped_pkg_dir, sizeof(escaped_pkg_dir));
+    char rm_cmd[PATH_MAX * 3 + 32];
+    snprintf(rm_cmd, sizeof(rm_cmd), "rm -rf %s", escaped_pkg_dir);
     if (run_system_cmd(rm_cmd) == 0) {
         log_success("Successfully removed package '%s'.", pkg_name);
     } else {
