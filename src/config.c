@@ -287,13 +287,10 @@ void config_show(void)
     } else {
         char default_target[PATH_MAX];
         get_target_dir(default_target, sizeof(default_target));
-        const char *home = getenv("HOME");
-        if (home && strlen(home) > 0) {
+        if (default_target[0] != '\0') {
             printf("  Target Directory: %s (fallback environment $HOME)\n", default_target);
         } else {
-            printf("  Target Directory: %s (fallback environment $HOME - WARNING: $HOME is "
-                   "missing/unset)\n",
-                   default_target);
+            printf("  Target Directory: (none - $HOME environment variable is not set)\n");
         }
     }
     printf("\n");
@@ -370,11 +367,11 @@ void get_active_target_dir(const char *cli_override, char *buf, size_t buf_size)
     }
     config_free(&cfg);
 
-    const char *home = getenv("HOME");
-    if (!home || strlen(home) == 0) {
-        log_warn("HOME environment variable is missing or empty! Falling back to target directory "
-                 "'/tmp'.");
-    }
-
     get_target_dir(buf, buf_size);
+    if (buf[0] == '\0') {
+        log_error(
+            "Fatal: $HOME environment variable is not set and no target directory was configured "
+            "(-t / --target-dir). Exiting.");
+        exit(EXIT_FAILURE);
+    }
 }

@@ -284,19 +284,19 @@ void test_degraded_env_path_resolution(void)
     char buf[PATH_MAX];
 
     get_xdg_config_home(buf, sizeof(buf));
-    ASSERT_STR_EQ(buf, "/tmp");
+    ASSERT_STR_EQ(buf, "");
 
     get_xdg_data_home(buf, sizeof(buf));
-    ASSERT_STR_EQ(buf, "/tmp");
+    ASSERT_STR_EQ(buf, "");
 
     get_xdg_cache_home(buf, sizeof(buf));
-    ASSERT_STR_EQ(buf, "/tmp");
+    ASSERT_STR_EQ(buf, "");
 
     get_xdg_state_home(buf, sizeof(buf));
-    ASSERT_STR_EQ(buf, "/tmp");
+    ASSERT_STR_EQ(buf, "");
 
     get_target_dir(buf, sizeof(buf));
-    ASSERT_STR_EQ(buf, "/tmp");
+    ASSERT_STR_EQ(buf, "");
 
     expand_tilde_path("~/dotfiles", buf, sizeof(buf));
     ASSERT_STR_EQ(buf, "~/dotfiles");
@@ -319,10 +319,10 @@ void test_degraded_env_path_resolution(void)
     setenv("HOME", "", 1);
 
     get_xdg_config_home(buf, sizeof(buf));
-    ASSERT_STR_EQ(buf, "/tmp");
+    ASSERT_STR_EQ(buf, "");
 
     get_target_dir(buf, sizeof(buf));
-    ASSERT_STR_EQ(buf, "/tmp");
+    ASSERT_STR_EQ(buf, "");
 
     expand_tilde_path("~/myconfig", buf, sizeof(buf));
     ASSERT_STR_EQ(buf, "~/myconfig");
