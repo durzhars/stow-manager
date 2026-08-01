@@ -72,4 +72,12 @@ assert_path_exists "$STOW_DOTFILES_DIR/mynewpkg" "Created package directory exis
 assert_success "$STOW_BIN pkg:remove mynewpkg" "stow-manager pkg:remove mynewpkg succeeded"
 assert_path_not_exists "$STOW_DOTFILES_DIR/mynewpkg" "Removed package directory no longer exists"
 
+# 7. deps target <pkg> <path>
+echo -e "\n${COLOR_BOLD}[Test 7] Per-package target directory configuration (deps target)${COLOR_RESET}"
+setup_sandbox
+mkdir -p "$STOW_DOTFILES_DIR/sysconfig"
+assert_success "$STOW_BIN deps target sysconfig /etc/custom" "deps target sysconfig /etc/custom succeeded"
+MANIFEST_FILE="$STOW_DOTFILES_DIR/sysconfig/.stowdeps"
+assert_file_contains "$MANIFEST_FILE" 'TARGET="/etc/custom"' ".stowdeps manifest updated with TARGET=\"/etc/custom\""
+
 print_summary

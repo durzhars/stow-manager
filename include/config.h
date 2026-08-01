@@ -42,5 +42,10 @@ void config_show(void);
 
 void get_active_dotfiles_dir(const char *cli_override, char *buf, size_t buf_size);
 void get_active_target_dir(const char *cli_override, char *buf, size_t buf_size);
+void get_active_target_dir_for_pkg(const char *cli_override,
+                                   const char *dotfiles_dir,
+                                   const char *pkg_name,
+                                   char *buf,
+                                   size_t buf_size);
 
 #endif /* CONFIG_H */

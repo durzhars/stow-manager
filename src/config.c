@@ -20,6 +20,7 @@
 #define _DEFAULT_SOURCE
 #define _POSIX_C_SOURCE 200809L
 #include "config.h"
+#include "manifest.h"
 
 void config_init(Config *cfg)
 {
@@ -378,4 +379,32 @@ void get_active_target_dir(const char *cli_override, char *buf, size_t buf_size)
             "(-t / --target-dir). Exiting.");
         exit(EXIT_FAILURE);
     }
+}
+
+void get_active_target_dir_for_pkg(const char *cli_override,
+                                   const char *dotfiles_dir,
+                                   const char *pkg_name,
+                                   char *buf,
+                                   size_t buf_size)
+{
+    if (cli_override && strlen(cli_override) > 0) {
+        expand_tilde_path(cli_override, buf, buf_size);
+        normalize_path(buf);
+        return;
+    }
+
+    if (dotfiles_dir && pkg_name && strlen(pkg_name) > 0) {
+        PackageManifest manifest;
+        manifest_init(&manifest, pkg_name);
+        if (manifest_load(&manifest, dotfiles_dir) && manifest.target_path &&
+            strlen(manifest.target_path) > 0) {
+            expand_tilde_path(manifest.target_path, buf, buf_size);
+            normalize_path(buf);
+            manifest_free(&manifest);
+            return;
+        }
+        manifest_free(&manifest);
+    }
+
+    get_active_target_dir(NULL, buf, buf_size);
 }

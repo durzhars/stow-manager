@@ -38,7 +38,7 @@ static void handle_config_command(const StringArray *args)
 
     if (strcmp(cmd, "config:target") == 0) {
         if (remaining < 1) {
-            log_error("Usage: stow-manager config target <path>");
+            log_error("Usage: stow-manager config set target <path>");
             return;
         }
         config_set_target_dir(args->items[1]);
@@ -78,7 +78,7 @@ static void handle_config_command(const StringArray *args)
 
         if (strcmp(sub, "set") == 0) {
             if (remaining < 2) {
-                log_error("Usage: stow-manager config set [dotfiles|target] <path>");
+                log_error("Usage: stow-manager config set <target|source|dotfiles> <path>");
                 return;
             }
             const char *key_or_path = args->items[2];
@@ -88,7 +88,8 @@ static void handle_config_command(const StringArray *args)
                     return;
                 }
                 config_set_target_dir(args->items[3]);
-            } else if (strcmp(key_or_path, "dotfiles") == 0 || strcmp(key_or_path, "repo") == 0) {
+            } else if (strcmp(key_or_path, "dotfiles") == 0 || strcmp(key_or_path, "source") == 0 ||
+                       strcmp(key_or_path, "repo") == 0) {
                 if (remaining < 3) {
                     log_error("Usage: stow-manager config set dotfiles <path>");
                     return;
@@ -106,7 +107,8 @@ static void handle_config_command(const StringArray *args)
                 return;
             }
             const char *key_or_path = args->items[2];
-            if (strcmp(key_or_path, "dotfiles") == 0 || strcmp(key_or_path, "repo") == 0) {
+            if (strcmp(key_or_path, "dotfiles") == 0 || strcmp(key_or_path, "repo") == 0 ||
+                strcmp(key_or_path, "source") == 0) {
                 if (remaining < 3) {
                     log_error("Usage: stow-manager config add <path>");
                     return;
@@ -124,7 +126,8 @@ static void handle_config_command(const StringArray *args)
                 return;
             }
             const char *key_or_path = args->items[2];
-            if (strcmp(key_or_path, "dotfiles") == 0 || strcmp(key_or_path, "repo") == 0) {
+            if (strcmp(key_or_path, "dotfiles") == 0 || strcmp(key_or_path, "repo") == 0 ||
+                strcmp(key_or_path, "source") == 0) {
                 if (remaining < 3) {
                     log_error("Usage: stow-manager config remove <path>");
                     return;
@@ -136,35 +139,7 @@ static void handle_config_command(const StringArray *args)
             return;
         }
 
-        if (strcmp(sub, "target") == 0) {
-            if (remaining < 2) {
-                log_error("Usage: stow-manager config target <path>");
-                return;
-            }
-            config_set_target_dir(args->items[2]);
-            return;
-        }
-
-        if (strcmp(sub, "dotfiles") == 0 || strcmp(sub, "repo") == 0) {
-            if (remaining < 2) {
-                log_error("Usage: stow-manager config dotfiles <path>");
-                return;
-            }
-            config_set_dotfiles_dir(args->items[2]);
-            return;
-        }
-
-        char abs_sub[PATH_MAX * 2];
-        expand_tilde_path(sub, abs_sub, sizeof(abs_sub));
-        normalize_path(abs_sub);
-        if (is_dir(abs_sub)) {
-            config_set_dotfiles_dir(abs_sub);
-        } else {
-            log_error("Unknown config subcommand or non-existent path '%s'", sub);
-            log_info("Valid commands: config show, config set dotfiles <path>, "
-                     "config target <path>, config add <path>, config remove "
-                     "<path>");
-        }
+        config_show();
         return;
     }
 }
@@ -175,6 +150,7 @@ int main(int argc, char **argv)
 
     bool auto_install = false;
     bool dry_run = false;
+    bool save_flag = false;
     const char *cli_dotfiles_dir = NULL;
     const char *cli_target_dir = NULL;
 
@@ -206,6 +182,8 @@ int main(int argc, char **argv)
             auto_install = true;
         } else if (strcmp(argv[i], "-n") == 0 || strcmp(argv[i], "--dry-run") == 0) {
             dry_run = true;
+        } else if (strcmp(argv[i], "-s") == 0 || strcmp(argv[i], "--save") == 0) {
+            save_flag = true;
         } else if (strcmp(argv[i], "-h") == 0 || strcmp(argv[i], "--help") == 0) {
             show_help();
             str_array_free(&args);
@@ -221,6 +199,18 @@ int main(int argc, char **argv)
         return 0;
     }
 
+    // Option C: Save CLI directory overrides to configuration file when -s / --save is passed
+    if (save_flag) {
+        if (cli_target_dir && strlen(cli_target_dir) > 0) {
+            config_set_target_dir(cli_target_dir);
+            log_info("Saved target directory override to config: %s", cli_target_dir);
+        }
+        if (cli_dotfiles_dir && strlen(cli_dotfiles_dir) > 0) {
+            config_set_dotfiles_dir(cli_dotfiles_dir);
+            log_info("Saved dotfiles directory override to config: %s", cli_dotfiles_dir);
+        }
+    }
+
     const char *cmd = args.items[0];
 
     if (strncmp(cmd, "config", 6) == 0) {
@@ -230,14 +220,117 @@ int main(int argc, char **argv)
     }
 
     char dotfiles_dir[PATH_MAX * 2];
-    char target_dir[PATH_MAX * 2];
+    char global_target_dir[PATH_MAX * 2];
 
     get_active_dotfiles_dir(cli_dotfiles_dir, dotfiles_dir, sizeof(dotfiles_dir));
-    get_active_target_dir(cli_target_dir, target_dir, sizeof(target_dir));
+    get_active_target_dir(cli_target_dir, global_target_dir, sizeof(global_target_dir));
+
+    // Handle space-separated subcommands: "pkg create", "deps add", "check symlinks", "fix
+    // conflicts"
+    if (strcmp(cmd, "pkg") == 0 || strcmp(cmd, "package") == 0) {
+        if (args.count < 2) {
+            log_error("Usage: stow-manager pkg <create|remove|list> [args...]");
+            str_array_free(&args);
+            return 1;
+        }
+        const char *sub = args.items[1];
+        if (strcmp(sub, "create") == 0 || strcmp(sub, "make") == 0) {
+            if (args.count < 3) {
+                log_error("Usage: stow-manager pkg create <package_name>");
+                str_array_free(&args);
+                return 1;
+            }
+            const char *pkg = args.items[2];
+            PackageManifest manifest;
+            manifest_init(&manifest, pkg);
+            manifest_save(&manifest, dotfiles_dir);
+            log_success("Created package directory & manifest for '%s'.", pkg);
+            manifest_free(&manifest);
+            str_array_free(&args);
+            return 0;
+        } else if (strcmp(sub, "remove") == 0 || strcmp(sub, "rm") == 0) {
+            if (args.count < 3) {
+                log_error("Usage: stow-manager pkg remove <package_name...>");
+                str_array_free(&args);
+                return 1;
+            }
+            for (size_t i = 2; i < args.count; i++) {
+                char target_dir[PATH_MAX * 2];
+                get_active_target_dir_for_pkg(
+                    cli_target_dir, dotfiles_dir, args.items[i], target_dir, sizeof(target_dir));
+                package_remove(dotfiles_dir, target_dir, args.items[i], dry_run);
+            }
+            str_array_free(&args);
+            return 0;
+        } else if (strcmp(sub, "list") == 0 || strcmp(sub, "show") == 0) {
+            list_packages_status(dotfiles_dir, global_target_dir);
+            str_array_free(&args);
+            return 0;
+        }
+    }
+
+    if (strcmp(cmd, "deps") == 0) {
+        if (args.count < 2) {
+            log_error("Usage: stow-manager deps <add|edit|remove|show|target> [args...]");
+            str_array_free(&args);
+            return 1;
+        }
+        const char *sub = args.items[1];
+        if (strcmp(sub, "add") == 0) {
+            if (args.count < 4) {
+                log_error("Usage: stow-manager deps add <package> <dependency> "
+                          "[--required|--optional|--conflict]");
+                str_array_free(&args);
+                return 1;
+            }
+            const char *pkg = args.items[2];
+            const char *dep = args.items[3];
+            const char *type = (args.count > 4) ? args.items[4] : "--optional";
+            manifest_add_dep(dotfiles_dir, pkg, dep, type);
+            str_array_free(&args);
+            return 0;
+        } else if (strcmp(sub, "edit") == 0 || strcmp(sub, "set") == 0) {
+            if (args.count < 5) {
+                log_error("Usage: stow-manager deps edit <package> <dependency> <new_type>");
+                str_array_free(&args);
+                return 1;
+            }
+            manifest_edit_dep(dotfiles_dir, args.items[2], args.items[3], args.items[4]);
+            str_array_free(&args);
+            return 0;
+        } else if (strcmp(sub, "remove") == 0 || strcmp(sub, "rm") == 0) {
+            if (args.count < 4) {
+                log_error("Usage: stow-manager deps remove <package> <dependency>");
+                str_array_free(&args);
+                return 1;
+            }
+            manifest_remove_dep(dotfiles_dir, args.items[2], args.items[3]);
+            str_array_free(&args);
+            return 0;
+        } else if (strcmp(sub, "show") == 0 || strcmp(sub, "list") == 0) {
+            if (args.count < 3) {
+                log_error("Usage: stow-manager deps show <package>");
+                str_array_free(&args);
+                return 1;
+            }
+            manifest_show(dotfiles_dir, args.items[2]);
+            str_array_free(&args);
+            return 0;
+        } else if (strcmp(sub, "target") == 0) {
+            if (args.count < 4) {
+                log_error("Usage: stow-manager deps target <package> <path>");
+                str_array_free(&args);
+                return 1;
+            }
+            manifest_set_target(dotfiles_dir, args.items[2], args.items[3]);
+            str_array_free(&args);
+            return 0;
+        }
+    }
 
     if (strcmp(cmd, "deps:add") == 0) {
         if (args.count < 3) {
-            log_error("Usage: stow-manager deps:add <package> <dependency> "
+            log_error("Usage: stow-manager deps add <package> <dependency> "
                       "[--required|--optional|--conflict]");
             str_array_free(&args);
             return 1;
@@ -248,32 +341,36 @@ int main(int argc, char **argv)
         manifest_add_dep(dotfiles_dir, pkg, dep, type);
     } else if (strcmp(cmd, "deps:edit") == 0 || strcmp(cmd, "deps:set") == 0) {
         if (args.count < 4) {
-            log_error("Usage: stow-manager deps:edit <package> <dependency> "
-                      "<new_type>");
-            log_info("Available types: --required, --optional, --conflict (or "
-                     "required, optional, conflict)");
+            log_error("Usage: stow-manager deps edit <package> <dependency> <new_type>");
             str_array_free(&args);
             return 1;
         }
         manifest_edit_dep(dotfiles_dir, args.items[1], args.items[2], args.items[3]);
     } else if (strcmp(cmd, "deps:remove") == 0 || strcmp(cmd, "deps:rm") == 0) {
         if (args.count < 3) {
-            log_error("Usage: stow-manager deps:remove <package> <dependency>");
+            log_error("Usage: stow-manager deps remove <package> <dependency>");
             str_array_free(&args);
             return 1;
         }
         manifest_remove_dep(dotfiles_dir, args.items[1], args.items[2]);
     } else if (strcmp(cmd, "deps:show") == 0 || strcmp(cmd, "deps:list") == 0) {
         if (args.count < 2) {
-            log_error("Usage: stow-manager deps:show <package>");
+            log_error("Usage: stow-manager deps show <package>");
             str_array_free(&args);
             return 1;
         }
         manifest_show(dotfiles_dir, args.items[1]);
+    } else if (strcmp(cmd, "deps:target") == 0) {
+        if (args.count < 3) {
+            log_error("Usage: stow-manager deps target <package> <path>");
+            str_array_free(&args);
+            return 1;
+        }
+        manifest_set_target(dotfiles_dir, args.items[1], args.items[2]);
     } else if (strcmp(cmd, "pkg:create") == 0 || strcmp(cmd, "package:create") == 0 ||
                strcmp(cmd, "make:package") == 0 || strcmp(cmd, "make:pkg") == 0) {
         if (args.count < 2) {
-            log_error("Usage: stow-manager pkg:create <package_name>");
+            log_error("Usage: stow-manager pkg create <package_name>");
             str_array_free(&args);
             return 1;
         }
@@ -287,34 +384,43 @@ int main(int argc, char **argv)
                strcmp(cmd, "remove:package") == 0 || strcmp(cmd, "pkg:rm") == 0 ||
                strcmp(cmd, "package:rm") == 0) {
         if (args.count < 2) {
-            log_error("Usage: stow-manager pkg:remove <package_name>");
+            log_error("Usage: stow-manager pkg remove <package_name...>");
             str_array_free(&args);
             return 1;
         }
         for (size_t i = 1; i < args.count; i++) {
+            char target_dir[PATH_MAX * 2];
+            get_active_target_dir_for_pkg(
+                cli_target_dir, dotfiles_dir, args.items[i], target_dir, sizeof(target_dir));
             package_remove(dotfiles_dir, target_dir, args.items[i], dry_run);
         }
     } else if (strcmp(cmd, "pkg:list") == 0 || strcmp(cmd, "package:list") == 0 ||
                strcmp(cmd, "list") == 0) {
-        list_packages_status(dotfiles_dir, target_dir);
+        list_packages_status(dotfiles_dir, global_target_dir);
     } else if (strcmp(cmd, "check") == 0) {
-        if (args.count > 1) {
+        if (args.count > 1 && strcmp(args.items[1], "symlinks") == 0) {
+            check_symlink_health(dotfiles_dir, global_target_dir);
+        } else if (args.count > 1) {
             for (size_t i = 1; i < args.count; i++) {
                 check_package_dependencies(dotfiles_dir, args.items[i], auto_install, dry_run);
             }
+            check_symlink_health(dotfiles_dir, global_target_dir);
         } else {
             check_package_dependencies(dotfiles_dir, NULL, auto_install, dry_run);
+            check_symlink_health(dotfiles_dir, global_target_dir);
         }
-        check_symlink_health(dotfiles_dir, target_dir);
     } else if (strcmp(cmd, "check-symlinks") == 0) {
-        check_symlink_health(dotfiles_dir, target_dir);
+        check_symlink_health(dotfiles_dir, global_target_dir);
     } else if (strcmp(cmd, "diff") == 0) {
         if (args.count > 1) {
             for (size_t i = 1; i < args.count; i++) {
+                char target_dir[PATH_MAX * 2];
+                get_active_target_dir_for_pkg(
+                    cli_target_dir, dotfiles_dir, args.items[i], target_dir, sizeof(target_dir));
                 stow_package(dotfiles_dir, target_dir, args.items[i], auto_install, true);
             }
         } else {
-            stow_all_packages(dotfiles_dir, target_dir, auto_install, true);
+            stow_all_packages(dotfiles_dir, global_target_dir, auto_install, true);
         }
     } else if (strcmp(cmd, "scan") == 0) {
         if (args.count > 1) {
@@ -337,6 +443,9 @@ int main(int argc, char **argv)
             return 1;
         }
         for (size_t i = 1; i < args.count; i++) {
+            char target_dir[PATH_MAX * 2];
+            get_active_target_dir_for_pkg(
+                cli_target_dir, dotfiles_dir, args.items[i], target_dir, sizeof(target_dir));
             stow_package(dotfiles_dir, target_dir, args.items[i], auto_install, dry_run);
         }
     } else if (strcmp(cmd, "unstow") == 0) {
@@ -346,6 +455,9 @@ int main(int argc, char **argv)
             return 1;
         }
         for (size_t i = 1; i < args.count; i++) {
+            char target_dir[PATH_MAX * 2];
+            get_active_target_dir_for_pkg(
+                cli_target_dir, dotfiles_dir, args.items[i], target_dir, sizeof(target_dir));
             unstow_package(dotfiles_dir, target_dir, args.items[i], dry_run);
         }
     } else if (strcmp(cmd, "restow") == 0) {
@@ -355,12 +467,19 @@ int main(int argc, char **argv)
             return 1;
         }
         for (size_t i = 1; i < args.count; i++) {
+            char target_dir[PATH_MAX * 2];
+            get_active_target_dir_for_pkg(
+                cli_target_dir, dotfiles_dir, args.items[i], target_dir, sizeof(target_dir));
             restow_package(dotfiles_dir, target_dir, args.items[i], auto_install, dry_run);
         }
+    } else if (strcmp(cmd, "fix") == 0 && args.count > 1 &&
+               (strcmp(args.items[1], "conflicts") == 0 ||
+                strcmp(args.items[1], "symlinks") == 0)) {
+        unfold_directory_symlinks(global_target_dir, dotfiles_dir, dry_run);
     } else if (strcmp(cmd, "fix-conflicts") == 0) {
-        unfold_directory_symlinks(target_dir, dotfiles_dir, dry_run);
+        unfold_directory_symlinks(global_target_dir, dotfiles_dir, dry_run);
     } else if (strcmp(cmd, "all") == 0) {
-        stow_all_packages(dotfiles_dir, target_dir, auto_install, dry_run);
+        stow_all_packages(dotfiles_dir, global_target_dir, auto_install, dry_run);
     } else if (strcmp(cmd, "help") == 0) {
         show_help();
     } else {
@@ -375,10 +494,13 @@ int main(int argc, char **argv)
         }
         if (all_valid) {
             for (size_t i = 0; i < args.count; i++) {
+                char target_dir[PATH_MAX * 2];
+                get_active_target_dir_for_pkg(
+                    cli_target_dir, dotfiles_dir, args.items[i], target_dir, sizeof(target_dir));
                 stow_package(dotfiles_dir, target_dir, args.items[i], auto_install, dry_run);
             }
         } else {
-            log_error("Unknown command or package '%s'", cmd);
+            log_error("Unknown command: %s", cmd);
             show_help();
             str_array_free(&args);
             return 1;

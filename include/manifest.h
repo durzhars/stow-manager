@@ -23,6 +23,7 @@
 
 typedef struct {
     char *package_name;
+    char *target_path;
     StringArray required;
     StringArray optional;
     StringArray conflicts;
@@ -42,6 +43,7 @@ void manifest_edit_dep(const char *dotfiles_dir,
                        const char *dep,
                        const char *new_type);
 void manifest_remove_dep(const char *dotfiles_dir, const char *pkg_name, const char *dep);
+void manifest_set_target(const char *dotfiles_dir, const char *pkg_name, const char *target_path);
 void manifest_show(const char *dotfiles_dir, const char *pkg_name);
 
 void package_remove(const char *dotfiles_dir,

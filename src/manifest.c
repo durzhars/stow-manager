@@ -44,6 +44,7 @@ static void parse_space_delimited(const char *str, StringArray *arr)
 void manifest_init(PackageManifest *manifest, const char *pkg_name)
 {
     manifest->package_name = strdup(pkg_name);
+    manifest->target_path = NULL;
     str_array_init(&manifest->required);
     str_array_init(&manifest->optional);
     str_array_init(&manifest->conflicts);
@@ -79,7 +80,19 @@ bool manifest_load(PackageManifest *manifest, const char *dotfiles_dir)
             char *key = trim_whitespace(trimmed);
             char *val = trim_whitespace(eq + 1);
 
-            if (strcmp(key, "REQUIRED") == 0) {
+            size_t vlen = strlen(val);
+            if (vlen >= 2 && ((val[0] == '"' && val[vlen - 1] == '"') ||
+                              (val[0] == '\'' && val[vlen - 1] == '\''))) {
+                val[vlen - 1] = '\0';
+                val++;
+            }
+
+            if (strcmp(key, "TARGET") == 0 || strcmp(key, "TARGET_DIR") == 0) {
+                if (manifest->target_path) {
+                    free(manifest->target_path);
+                }
+                manifest->target_path = safe_strdup(val);
+            } else if (strcmp(key, "REQUIRED") == 0) {
                 parse_space_delimited(val, &manifest->required);
             } else if (strcmp(key, "OPTIONAL") == 0) {
                 parse_space_delimited(val, &manifest->optional);
@@ -109,6 +122,10 @@ bool manifest_save(const PackageManifest *manifest, const char *dotfiles_dir)
     }
 
     fprintf(fp, "# Package Dependency Manifest for '%s'\n", manifest->package_name);
+
+    if (manifest->target_path && strlen(manifest->target_path) > 0) {
+        fprintf(fp, "TARGET=\"%s\"\n", manifest->target_path);
+    }
 
     fprintf(fp, "REQUIRED=\"");
     for (size_t i = 0; i < manifest->required.count; i++) {
@@ -142,10 +159,36 @@ void manifest_free(PackageManifest *manifest)
     if (!manifest) {
         return;
     }
-    free(manifest->package_name);
+    if (manifest->package_name) {
+        free(manifest->package_name);
+        manifest->package_name = NULL;
+    }
+    if (manifest->target_path) {
+        free(manifest->target_path);
+        manifest->target_path = NULL;
+    }
     str_array_free(&manifest->required);
     str_array_free(&manifest->optional);
     str_array_free(&manifest->conflicts);
+}
+
+void manifest_set_target(const char *dotfiles_dir, const char *pkg_name, const char *target_path)
+{
+    PackageManifest manifest;
+    manifest_init(&manifest, pkg_name);
+    manifest_load(&manifest, dotfiles_dir);
+
+    if (manifest.target_path) {
+        free(manifest.target_path);
+    }
+    manifest.target_path = safe_strdup(target_path);
+
+    if (manifest_save(&manifest, dotfiles_dir)) {
+        log_success("Set target path for package '%s': %s", pkg_name, target_path);
+    } else {
+        log_error("Failed to save target path for package '%s'", pkg_name);
+    }
+    manifest_free(&manifest);
 }
 
 void manifest_add_dep(const char *dotfiles_dir,

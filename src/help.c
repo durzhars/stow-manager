@@ -66,35 +66,18 @@ static void render_plain_line(const char *line, bool use_color)
         }
     }
 
-    /* Section headers: lines ending with ':' where leading words are ALL-CAPS */
-    /* e.g. "GLOBAL OPTIONS:", "CONFIGURATION COMMANDS (config:*):" */
+    /* Section headers: e.g. "USAGE:", "CORE COMMANDS:", "PACKAGE MANAGEMENT (pkg):" */
     if (buf[0] != ' ' && buf[0] != '\0' && len > 1) {
         size_t blen = strlen(buf);
         if (blen > 0 && buf[blen - 1] == ':') {
-            /* Check that text before first '(' is uppercase */
-            const char *p = buf;
-            bool is_header = true;
-            while (*p && *p != '(') {
-                if (*p >= 'a' && *p <= 'z') {
-                    is_header = false;
-                    break;
-                }
-                p++;
-            }
-            if (is_header) {
-                /* Strip trailing ':' for cleaner display */
-                char header[1024];
-                memcpy(header, buf, blen - 1);
-                header[blen - 1] = '\0';
-                printf("\n%s%s=== %s ===%s\n", COLOR_BOLD, COLOR_CYAN, header, COLOR_RESET);
-                return;
-            }
+            printf("\n%s%s%s%s\n", COLOR_BOLD, COLOR_CYAN, buf, COLOR_RESET);
+            return;
         }
     }
 
     /* Indented command/option lines: "  command  Description" */
     if (buf[0] == ' ' && buf[1] == ' ' && buf[2] != ' ' && buf[2] != '\0') {
-        printf("  %s•%s %s\n", COLOR_CYAN, COLOR_RESET, buf + 2);
+        printf("%s\n", buf);
         return;
     }
 

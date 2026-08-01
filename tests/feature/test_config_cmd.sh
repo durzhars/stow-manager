@@ -52,4 +52,16 @@ assert_file_contains "$LAST_CMD_OUTPUT" "$REPO_SECONDARY" "config show contains 
 assert_success "$STOW_BIN config remove $REPO_SECONDARY" "stow-manager config remove succeeded"
 assert_file_not_contains "$CONFIG_FILE" "$REPO_SECONDARY" "Config file no longer contains removed repository path"
 
+# 4. Save CLI overrides to config (-s / --save)
+echo -e "\n${COLOR_BOLD}[Test 4] Save CLI overrides to config (-s / --save)${COLOR_RESET}"
+setup_sandbox
+SAVE_TARGET="$TEST_TMPDIR/saved_target"
+SAVE_DOTFILES="$TEST_TMPDIR/saved_dotfiles"
+mkdir -p "$SAVE_TARGET" "$SAVE_DOTFILES"
+
+assert_success "$STOW_BIN -t $SAVE_TARGET -d $SAVE_DOTFILES -s help" "stow-manager -s --save flag succeeded"
+CONFIG_FILE="$XDG_CONFIG_HOME/stow-manager/config"
+assert_file_contains "$CONFIG_FILE" "TARGET_DIR=$SAVE_TARGET" "config file persisted TARGET_DIR via -s / --save"
+assert_file_contains "$CONFIG_FILE" "$SAVE_DOTFILES" "config file persisted DOTFILES_DIRS via -s / --save"
+
 print_summary
