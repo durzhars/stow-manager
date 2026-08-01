@@ -183,7 +183,6 @@ void test_expand_env_vars(void)
 
     setenv("TEST_STOW_VAR1", "/custom/path", 1);
     setenv("TEST_STOW_VAR2", "my_app", 1);
-    setenv("TEST_STOW_WINVAR", "C:\\Users\\test", 1);
 
     // 1. POSIX $VAR syntax
     expand_env_vars("$TEST_STOW_VAR1/sub", out, sizeof(out));
@@ -193,11 +192,7 @@ void test_expand_env_vars(void)
     expand_env_vars("${TEST_STOW_VAR2}/config", out, sizeof(out));
     ASSERT_STR_EQ(out, "my_app/config");
 
-    // 3. Windows %VAR% syntax
-    expand_env_vars("%TEST_STOW_WINVAR%\\dotfiles", out, sizeof(out));
-    ASSERT_STR_EQ(out, "C:\\Users\\test\\dotfiles");
-
-    // 4. Combination of tilde + env var in expand_tilde_path
+    // 3. Combination of tilde + env var in expand_tilde_path
     const char *home = getenv("HOME");
     if (home) {
         expand_tilde_path("~/$TEST_STOW_VAR2", out, sizeof(out));
@@ -206,14 +201,13 @@ void test_expand_env_vars(void)
         ASSERT_STR_EQ(out, expected);
     }
 
-    // 5. Undefined environment variable
+    // 4. Undefined environment variable
     unsetenv("TEST_STOW_UNDEF_XYZ");
     expand_env_vars("$TEST_STOW_UNDEF_XYZ/target", out, sizeof(out));
     ASSERT_STR_EQ(out, "/target");
 
     unsetenv("TEST_STOW_VAR1");
     unsetenv("TEST_STOW_VAR2");
-    unsetenv("TEST_STOW_WINVAR");
 }
 
 void test_is_path_prefix(void)

@@ -86,25 +86,6 @@ void expand_env_vars(const char *src, char *out, size_t out_size)
             } else {
                 out[o++] = src[i++];
             }
-        } else if (src[i] == '%') {
-            size_t j = i + 1;
-            char varname[256] = {0};
-            size_t vn = 0;
-            while (j < srclen && src[j] != '%' && vn + 1 < sizeof(varname)) {
-                varname[vn++] = src[j++];
-            }
-            if (j < srclen && src[j] == '%' && vn > 0) {
-                const char *val = getenv(varname);
-                if (val) {
-                    size_t vlen = strlen(val);
-                    for (size_t k = 0; k < vlen && o + 1 < out_size; k++) {
-                        out[o++] = val[k];
-                    }
-                }
-                i = j + 1;
-            } else {
-                out[o++] = src[i++];
-            }
         } else {
             out[o++] = src[i++];
         }
@@ -115,9 +96,6 @@ void expand_env_vars(const char *src, char *out, size_t out_size)
 static const char *get_user_home_dir(void)
 {
     const char *home = getenv("HOME");
-    if (!home || strlen(home) == 0) {
-        home = getenv("USERPROFILE");
-    }
     return (home && strlen(home) > 0) ? home : NULL;
 }
 
@@ -190,14 +168,14 @@ void get_xdg_data_dirs(StringArray *dirs)
     char *copy = safe_strdup(env);
 
     char *saveptr = NULL;
-    char *token = strtok_r(copy, ":;", &saveptr);
+    char *token = strtok_r(copy, ":", &saveptr);
     while (token) {
         if (strlen(token) > 0) {
             char expanded[PATH_MAX * 2];
             expand_env_vars(token, expanded, sizeof(expanded));
             str_array_append(dirs, expanded);
         }
-        token = strtok_r(NULL, ":;", &saveptr);
+        token = strtok_r(NULL, ":", &saveptr);
     }
     free(copy);
 }
@@ -211,14 +189,14 @@ void get_xdg_config_dirs(StringArray *dirs)
     char *copy = safe_strdup(env);
 
     char *saveptr = NULL;
-    char *token = strtok_r(copy, ":;", &saveptr);
+    char *token = strtok_r(copy, ":", &saveptr);
     while (token) {
         if (strlen(token) > 0) {
             char expanded[PATH_MAX * 2];
             expand_env_vars(token, expanded, sizeof(expanded));
             str_array_append(dirs, expanded);
         }
-        token = strtok_r(NULL, ":;", &saveptr);
+        token = strtok_r(NULL, ":", &saveptr);
     }
     free(copy);
 }
@@ -249,7 +227,7 @@ bool is_executable_in_path(const char *executable)
         return false;
     }
 
-    if (strchr(executable, '/') != NULL || strchr(executable, '\\') != NULL) {
+    if (strchr(executable, '/') != NULL) {
         return access(executable, X_OK) == 0;
     }
 
@@ -260,7 +238,7 @@ bool is_executable_in_path(const char *executable)
 
     char *path_copy = safe_strdup(path_env);
     char *saveptr = NULL;
-    char *token = strtok_r(path_copy, ":;", &saveptr);
+    char *token = strtok_r(path_copy, ":", &saveptr);
     bool found = false;
     char full_path[PATH_MAX * 2];
 
@@ -270,7 +248,7 @@ bool is_executable_in_path(const char *executable)
             found = true;
             break;
         }
-        token = strtok_r(NULL, ":;", &saveptr);
+        token = strtok_r(NULL, ":", &saveptr);
     }
 
     free(path_copy);
