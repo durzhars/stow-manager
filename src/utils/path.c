@@ -122,16 +122,21 @@ void expand_tilde_path(const char *path, char *out, size_t out_size)
     if (!path || !out || out_size == 0) {
         return;
     }
+    char temp[PATH_MAX * 2];
     if (path[0] == '~' && (path[1] == '/' || path[1] == '\0')) {
         const char *home = getenv("HOME");
-        if (home) {
-            snprintf(out, out_size, "%s%s", home, path + 1);
+        if (!home || strlen(home) == 0) {
+            home = getenv("USERPROFILE");
+        }
+        if (home && strlen(home) > 0) {
+            snprintf(temp, sizeof(temp), "%s%s", home, path + 1);
         } else {
-            snprintf(out, out_size, "%s", path);
+            snprintf(temp, sizeof(temp), "%s", path);
         }
     } else {
-        snprintf(out, out_size, "%s", path);
+        snprintf(temp, sizeof(temp), "%s", path);
     }
+    expand_env_vars(temp, out, out_size);
 }
 
 void get_dotfiles_dir(char *buf, size_t buf_size)
@@ -147,7 +152,10 @@ void get_dotfiles_dir(char *buf, size_t buf_size)
 void get_target_dir(char *buf, size_t buf_size)
 {
     const char *home = getenv("HOME");
-    if (home) {
+    if (!home || strlen(home) == 0) {
+        home = getenv("USERPROFILE");
+    }
+    if (home && strlen(home) > 0) {
         snprintf(buf, buf_size, "%s", home);
     } else {
         snprintf(buf, buf_size, "/tmp");

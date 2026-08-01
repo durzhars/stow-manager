@@ -27,14 +27,108 @@
 #include <string.h>
 #include <unistd.h>
 
+static bool is_var_start_char(char c)
+{
+    return (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c == '_');
+}
+
+static bool is_var_body_char(char c)
+{
+    return (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || (c == '_');
+}
+
+void expand_env_vars(const char *src, char *out, size_t out_size)
+{
+    if (!src || !out || out_size == 0) {
+        return;
+    }
+
+    size_t srclen = strlen(src);
+    size_t o = 0;
+    size_t i = 0;
+
+    while (i < srclen && o + 1 < out_size) {
+        if (src[i] == '$') {
+            if (i + 1 < srclen && src[i + 1] == '{') {
+                size_t j = i + 2;
+                char varname[256] = {0};
+                size_t vn = 0;
+                while (j < srclen && src[j] != '}' && vn + 1 < sizeof(varname)) {
+                    varname[vn++] = src[j++];
+                }
+                if (j < srclen && src[j] == '}' && vn > 0) {
+                    const char *val = getenv(varname);
+                    if (val) {
+                        size_t vlen = strlen(val);
+                        for (size_t k = 0; k < vlen && o + 1 < out_size; k++) {
+                            out[o++] = val[k];
+                        }
+                    }
+                    i = j + 1;
+                } else {
+                    out[o++] = src[i++];
+                }
+            } else if (i + 1 < srclen && is_var_start_char(src[i + 1])) {
+                size_t j = i + 1;
+                char varname[256] = {0};
+                size_t vn = 0;
+                while (j < srclen && is_var_body_char(src[j]) && vn + 1 < sizeof(varname)) {
+                    varname[vn++] = src[j++];
+                }
+                const char *val = getenv(varname);
+                if (val) {
+                    size_t vlen = strlen(val);
+                    for (size_t k = 0; k < vlen && o + 1 < out_size; k++) {
+                        out[o++] = val[k];
+                    }
+                }
+                i = j;
+            } else {
+                out[o++] = src[i++];
+            }
+        } else if (src[i] == '%') {
+            size_t j = i + 1;
+            char varname[256] = {0};
+            size_t vn = 0;
+            while (j < srclen && src[j] != '%' && vn + 1 < sizeof(varname)) {
+                varname[vn++] = src[j++];
+            }
+            if (j < srclen && src[j] == '%' && vn > 0) {
+                const char *val = getenv(varname);
+                if (val) {
+                    size_t vlen = strlen(val);
+                    for (size_t k = 0; k < vlen && o + 1 < out_size; k++) {
+                        out[o++] = val[k];
+                    }
+                }
+                i = j + 1;
+            } else {
+                out[o++] = src[i++];
+            }
+        } else {
+            out[o++] = src[i++];
+        }
+    }
+    out[o] = '\0';
+}
+
+static const char *get_user_home_dir(void)
+{
+    const char *home = getenv("HOME");
+    if (!home || strlen(home) == 0) {
+        home = getenv("USERPROFILE");
+    }
+    return (home && strlen(home) > 0) ? home : NULL;
+}
+
 void get_xdg_config_home(char *buf, size_t buf_size)
 {
     const char *env = getenv("XDG_CONFIG_HOME");
-    if (env && strlen(env) > 0 && env[0] == '/') {
-        snprintf(buf, buf_size, "%s", env);
+    if (env && strlen(env) > 0) {
+        expand_env_vars(env, buf, buf_size);
     } else {
-        const char *home = getenv("HOME");
-        if (home && strlen(home) > 0) {
+        const char *home = get_user_home_dir();
+        if (home) {
             snprintf(buf, buf_size, "%s/.config", home);
         } else {
             snprintf(buf, buf_size, "/tmp");
@@ -45,11 +139,11 @@ void get_xdg_config_home(char *buf, size_t buf_size)
 void get_xdg_data_home(char *buf, size_t buf_size)
 {
     const char *env = getenv("XDG_DATA_HOME");
-    if (env && strlen(env) > 0 && env[0] == '/') {
-        snprintf(buf, buf_size, "%s", env);
+    if (env && strlen(env) > 0) {
+        expand_env_vars(env, buf, buf_size);
     } else {
-        const char *home = getenv("HOME");
-        if (home && strlen(home) > 0) {
+        const char *home = get_user_home_dir();
+        if (home) {
             snprintf(buf, buf_size, "%s/.local/share", home);
         } else {
             snprintf(buf, buf_size, "/tmp");
@@ -60,11 +154,11 @@ void get_xdg_data_home(char *buf, size_t buf_size)
 void get_xdg_cache_home(char *buf, size_t buf_size)
 {
     const char *env = getenv("XDG_CACHE_HOME");
-    if (env && strlen(env) > 0 && env[0] == '/') {
-        snprintf(buf, buf_size, "%s", env);
+    if (env && strlen(env) > 0) {
+        expand_env_vars(env, buf, buf_size);
     } else {
-        const char *home = getenv("HOME");
-        if (home && strlen(home) > 0) {
+        const char *home = get_user_home_dir();
+        if (home) {
             snprintf(buf, buf_size, "%s/.cache", home);
         } else {
             snprintf(buf, buf_size, "/tmp");
@@ -75,11 +169,11 @@ void get_xdg_cache_home(char *buf, size_t buf_size)
 void get_xdg_state_home(char *buf, size_t buf_size)
 {
     const char *env = getenv("XDG_STATE_HOME");
-    if (env && strlen(env) > 0 && env[0] == '/') {
-        snprintf(buf, buf_size, "%s", env);
+    if (env && strlen(env) > 0) {
+        expand_env_vars(env, buf, buf_size);
     } else {
-        const char *home = getenv("HOME");
-        if (home && strlen(home) > 0) {
+        const char *home = get_user_home_dir();
+        if (home) {
             snprintf(buf, buf_size, "%s/.local/state", home);
         } else {
             snprintf(buf, buf_size, "/tmp");
@@ -96,12 +190,14 @@ void get_xdg_data_dirs(StringArray *dirs)
     char *copy = safe_strdup(env);
 
     char *saveptr = NULL;
-    char *token = strtok_r(copy, ":", &saveptr);
+    char *token = strtok_r(copy, ":;", &saveptr);
     while (token) {
         if (strlen(token) > 0) {
-            str_array_append(dirs, token);
+            char expanded[PATH_MAX * 2];
+            expand_env_vars(token, expanded, sizeof(expanded));
+            str_array_append(dirs, expanded);
         }
-        token = strtok_r(NULL, ":", &saveptr);
+        token = strtok_r(NULL, ":;", &saveptr);
     }
     free(copy);
 }
@@ -115,12 +211,14 @@ void get_xdg_config_dirs(StringArray *dirs)
     char *copy = safe_strdup(env);
 
     char *saveptr = NULL;
-    char *token = strtok_r(copy, ":", &saveptr);
+    char *token = strtok_r(copy, ":;", &saveptr);
     while (token) {
         if (strlen(token) > 0) {
-            str_array_append(dirs, token);
+            char expanded[PATH_MAX * 2];
+            expand_env_vars(token, expanded, sizeof(expanded));
+            str_array_append(dirs, expanded);
         }
-        token = strtok_r(NULL, ":", &saveptr);
+        token = strtok_r(NULL, ":;", &saveptr);
     }
     free(copy);
 }
@@ -151,7 +249,7 @@ bool is_executable_in_path(const char *executable)
         return false;
     }
 
-    if (strchr(executable, '/') != NULL) {
+    if (strchr(executable, '/') != NULL || strchr(executable, '\\') != NULL) {
         return access(executable, X_OK) == 0;
     }
 
@@ -161,8 +259,8 @@ bool is_executable_in_path(const char *executable)
     }
 
     char *path_copy = safe_strdup(path_env);
-
-    char *token = strtok(path_copy, ":");
+    char *saveptr = NULL;
+    char *token = strtok_r(path_copy, ":;", &saveptr);
     bool found = false;
     char full_path[PATH_MAX * 2];
 
@@ -172,7 +270,7 @@ bool is_executable_in_path(const char *executable)
             found = true;
             break;
         }
-        token = strtok(NULL, ":");
+        token = strtok_r(NULL, ":;", &saveptr);
     }
 
     free(path_copy);

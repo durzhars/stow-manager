@@ -92,6 +92,7 @@ void join_path(char *out, size_t out_size, const char *dir, const char *rel);
 int mkdir_p(const char *path, mode_t mode);
 bool is_path_prefix(const char *path, const char *prefix);
 void escape_shell_arg(const char *src, char *dest, size_t dest_size);
+void expand_env_vars(const char *src, char *out, size_t out_size);
 void expand_tilde_path(const char *path, char *out, size_t out_size);
 
 // Signal Handling & Temp Path Registration

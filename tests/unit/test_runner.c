@@ -34,6 +34,7 @@ void test_normalize_path(void);
 void test_collapse_path(void);
 void test_escape_shell_arg(void);
 void test_expand_tilde_path(void);
+void test_expand_env_vars(void);
 void test_is_path_prefix(void);
 void test_mkdir_p(void);
 void test_join_path(void);
@@ -86,6 +87,7 @@ int main(void)
     RUN_TEST(test_collapse_path);
     RUN_TEST(test_escape_shell_arg);
     RUN_TEST(test_expand_tilde_path);
+    RUN_TEST(test_expand_env_vars);
     RUN_TEST(test_is_path_prefix);
     RUN_TEST(test_mkdir_p);
     RUN_TEST(test_join_path);
