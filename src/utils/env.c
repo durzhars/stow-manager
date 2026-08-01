@@ -99,76 +99,80 @@ static const char *get_user_home_dir(void)
     return (home && strlen(home) > 0) ? home : NULL;
 }
 
-void get_xdg_config_home(char *buf, size_t buf_size)
+bool get_xdg_config_home(char *buf, size_t buf_size)
 {
     if (!buf || buf_size == 0) {
-        return;
+        return false;
     }
     const char *env = getenv("XDG_CONFIG_HOME");
     if (env && strlen(env) > 0) {
         expand_env_vars(env, buf, buf_size);
-    } else {
-        const char *home = get_user_home_dir();
-        if (home) {
-            snprintf(buf, buf_size, "%s/.config", home);
-        } else {
-            buf[0] = '\0';
-        }
+        return true;
     }
+    const char *home = get_user_home_dir();
+    if (home) {
+        snprintf(buf, buf_size, "%s/.config", home);
+        return true;
+    }
+    buf[0] = '\0';
+    return false;
 }
 
-void get_xdg_data_home(char *buf, size_t buf_size)
+bool get_xdg_data_home(char *buf, size_t buf_size)
 {
     if (!buf || buf_size == 0) {
-        return;
+        return false;
     }
     const char *env = getenv("XDG_DATA_HOME");
     if (env && strlen(env) > 0) {
         expand_env_vars(env, buf, buf_size);
-    } else {
-        const char *home = get_user_home_dir();
-        if (home) {
-            snprintf(buf, buf_size, "%s/.local/share", home);
-        } else {
-            buf[0] = '\0';
-        }
+        return true;
     }
+    const char *home = get_user_home_dir();
+    if (home) {
+        snprintf(buf, buf_size, "%s/.local/share", home);
+        return true;
+    }
+    buf[0] = '\0';
+    return false;
 }
 
-void get_xdg_cache_home(char *buf, size_t buf_size)
+bool get_xdg_cache_home(char *buf, size_t buf_size)
 {
     if (!buf || buf_size == 0) {
-        return;
+        return false;
     }
     const char *env = getenv("XDG_CACHE_HOME");
     if (env && strlen(env) > 0) {
         expand_env_vars(env, buf, buf_size);
-    } else {
-        const char *home = get_user_home_dir();
-        if (home) {
-            snprintf(buf, buf_size, "%s/.cache", home);
-        } else {
-            buf[0] = '\0';
-        }
+        return true;
     }
+    const char *home = get_user_home_dir();
+    if (home) {
+        snprintf(buf, buf_size, "%s/.cache", home);
+        return true;
+    }
+    buf[0] = '\0';
+    return false;
 }
 
-void get_xdg_state_home(char *buf, size_t buf_size)
+bool get_xdg_state_home(char *buf, size_t buf_size)
 {
     if (!buf || buf_size == 0) {
-        return;
+        return false;
     }
     const char *env = getenv("XDG_STATE_HOME");
     if (env && strlen(env) > 0) {
         expand_env_vars(env, buf, buf_size);
-    } else {
-        const char *home = get_user_home_dir();
-        if (home) {
-            snprintf(buf, buf_size, "%s/.local/state", home);
-        } else {
-            buf[0] = '\0';
-        }
+        return true;
     }
+    const char *home = get_user_home_dir();
+    if (home) {
+        snprintf(buf, buf_size, "%s/.local/state", home);
+        return true;
+    }
+    buf[0] = '\0';
+    return false;
 }
 
 void get_xdg_data_dirs(StringArray *dirs)

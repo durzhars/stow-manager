@@ -69,10 +69,10 @@ bool str_array_contains(const StringArray *arr, const char *str);
 void str_array_free(StringArray *arr);
 
 // XDG Base Directory Specification Helpers
-void get_xdg_config_home(char *buf, size_t buf_size);
-void get_xdg_data_home(char *buf, size_t buf_size);
-void get_xdg_cache_home(char *buf, size_t buf_size);
-void get_xdg_state_home(char *buf, size_t buf_size);
+bool get_xdg_config_home(char *buf, size_t buf_size);
+bool get_xdg_data_home(char *buf, size_t buf_size);
+bool get_xdg_cache_home(char *buf, size_t buf_size);
+bool get_xdg_state_home(char *buf, size_t buf_size);
 void get_xdg_data_dirs(StringArray *dirs);
 void get_xdg_config_dirs(StringArray *dirs);
 
@@ -103,7 +103,7 @@ void cleanup_temp_paths(void);
 void cleanup_temp_paths_signal_safe(void);
 
 void get_dotfiles_dir(char *buf, size_t buf_size);
-void get_target_dir(char *buf, size_t buf_size);
+bool get_target_dir(char *buf, size_t buf_size);
 void get_all_packages(const char *dotfiles_dir, StringArray *packages);
 
 void parse_stowignore(const char *dir_path, StringArray *ignore_patterns);

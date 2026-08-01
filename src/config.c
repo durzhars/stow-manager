@@ -37,14 +37,16 @@ void config_free(Config *cfg)
 void get_config_file_path(char *buf, size_t buf_size)
 {
     char xdg_config[PATH_MAX];
-    get_xdg_config_home(xdg_config, sizeof(xdg_config));
+    bool has_xdg_config = get_xdg_config_home(xdg_config, sizeof(xdg_config));
 
-    char primary[PATH_MAX * 2];
-    snprintf(primary, sizeof(primary), "%s/stow-manager/config", xdg_config);
+    if (has_xdg_config) {
+        char primary[PATH_MAX * 2];
+        snprintf(primary, sizeof(primary), "%s/stow-manager/config", xdg_config);
 
-    if (file_exists(primary)) {
-        snprintf(buf, buf_size, "%s", primary);
-        return;
+        if (file_exists(primary)) {
+            snprintf(buf, buf_size, "%s", primary);
+            return;
+        }
     }
 
     StringArray config_dirs;
@@ -62,7 +64,11 @@ void get_config_file_path(char *buf, size_t buf_size)
     }
     str_array_free(&config_dirs);
 
-    snprintf(buf, buf_size, "%s", primary);
+    if (has_xdg_config) {
+        snprintf(buf, buf_size, "%s/stow-manager/config", xdg_config);
+    } else {
+        buf[0] = '\0';
+    }
 }
 
 bool config_load(Config *cfg)
@@ -286,8 +292,7 @@ void config_show(void)
         printf("  Target Directory: %s (configured)\n", cfg.target_dir);
     } else {
         char default_target[PATH_MAX];
-        get_target_dir(default_target, sizeof(default_target));
-        if (default_target[0] != '\0') {
+        if (get_target_dir(default_target, sizeof(default_target))) {
             printf("  Target Directory: %s (fallback environment $HOME)\n", default_target);
         } else {
             printf("  Target Directory: (none - $HOME environment variable is not set)\n");
@@ -367,8 +372,7 @@ void get_active_target_dir(const char *cli_override, char *buf, size_t buf_size)
     }
     config_free(&cfg);
 
-    get_target_dir(buf, buf_size);
-    if (buf[0] == '\0') {
+    if (!get_target_dir(buf, buf_size)) {
         log_error(
             "Fatal: $HOME environment variable is not set and no target directory was configured "
             "(-t / --target-dir). Exiting.");

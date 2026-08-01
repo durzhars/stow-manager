@@ -283,20 +283,16 @@ void test_degraded_env_path_resolution(void)
 
     char buf[PATH_MAX];
 
-    get_xdg_config_home(buf, sizeof(buf));
-    ASSERT_STR_EQ(buf, "");
-
-    get_xdg_data_home(buf, sizeof(buf));
-    ASSERT_STR_EQ(buf, "");
-
-    get_xdg_cache_home(buf, sizeof(buf));
-    ASSERT_STR_EQ(buf, "");
-
-    get_xdg_state_home(buf, sizeof(buf));
-    ASSERT_STR_EQ(buf, "");
-
-    get_target_dir(buf, sizeof(buf));
-    ASSERT_STR_EQ(buf, "");
+    ASSERT(!get_xdg_config_home(buf, sizeof(buf)),
+           "get_xdg_config_home should return false when HOME is unset");
+    ASSERT(!get_xdg_data_home(buf, sizeof(buf)),
+           "get_xdg_data_home should return false when HOME is unset");
+    ASSERT(!get_xdg_cache_home(buf, sizeof(buf)),
+           "get_xdg_cache_home should return false when HOME is unset");
+    ASSERT(!get_xdg_state_home(buf, sizeof(buf)),
+           "get_xdg_state_home should return false when HOME is unset");
+    ASSERT(!get_target_dir(buf, sizeof(buf)),
+           "get_target_dir should return false when HOME is unset");
 
     expand_tilde_path("~/dotfiles", buf, sizeof(buf));
     ASSERT_STR_EQ(buf, "~/dotfiles");
@@ -318,11 +314,10 @@ void test_degraded_env_path_resolution(void)
     // --- Scenario 2: Empty $HOME Variable ---
     setenv("HOME", "", 1);
 
-    get_xdg_config_home(buf, sizeof(buf));
-    ASSERT_STR_EQ(buf, "");
-
-    get_target_dir(buf, sizeof(buf));
-    ASSERT_STR_EQ(buf, "");
+    ASSERT(!get_xdg_config_home(buf, sizeof(buf)),
+           "get_xdg_config_home should return false when HOME is empty");
+    ASSERT(!get_target_dir(buf, sizeof(buf)),
+           "get_target_dir should return false when HOME is empty");
 
     expand_tilde_path("~/myconfig", buf, sizeof(buf));
     ASSERT_STR_EQ(buf, "~/myconfig");

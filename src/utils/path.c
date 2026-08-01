@@ -146,15 +146,16 @@ void get_dotfiles_dir(char *buf, size_t buf_size)
     }
 }
 
-void get_target_dir(char *buf, size_t buf_size)
+bool get_target_dir(char *buf, size_t buf_size)
 {
     if (!buf || buf_size == 0) {
-        return;
+        return false;
     }
     const char *home = getenv("HOME");
     if (home && strlen(home) > 0) {
         snprintf(buf, buf_size, "%s", home);
-    } else {
-        buf[0] = '\0';
+        return true;
     }
+    buf[0] = '\0';
+    return false;
 }
