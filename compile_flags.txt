@@ -1,6 +1,0 @@
--Iinclude
--Itests
--std=c17
--Wall
--Wextra
--pedantic
