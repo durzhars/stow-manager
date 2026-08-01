@@ -55,13 +55,19 @@ void test_string_array(void)
 
 void test_xdg_paths(void)
 {
+    const char *home = getenv("HOME");
+    ASSERT(home != NULL && strlen(home) > 0,
+           "HOME environment variable must be set and non-empty for standard XDG path resolution");
+
     char cfg_home[PATH_MAX];
-    get_xdg_config_home(cfg_home, sizeof(cfg_home));
-    ASSERT(strlen(cfg_home) > 0, "XDG_CONFIG_HOME should not be empty");
+    ASSERT(get_xdg_config_home(cfg_home, sizeof(cfg_home)),
+           "get_xdg_config_home should return true when HOME is set");
+    ASSERT(strlen(cfg_home) > 0, "XDG_CONFIG_HOME path should not be empty");
 
     char data_home[PATH_MAX];
-    get_xdg_data_home(data_home, sizeof(data_home));
-    ASSERT(strlen(data_home) > 0, "XDG_DATA_HOME should not be empty");
+    ASSERT(get_xdg_data_home(data_home, sizeof(data_home)),
+           "get_xdg_data_home should return true when HOME is set");
+    ASSERT(strlen(data_home) > 0, "XDG_DATA_HOME path should not be empty");
 
     StringArray data_dirs;
     str_array_init(&data_dirs);
