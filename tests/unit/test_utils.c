@@ -156,33 +156,52 @@ void test_escape_shell_arg(void)
 void test_expand_tilde_path(void)
 {
     char out[PATH_MAX];
-    const char *home = getenv("HOME");
-    ASSERT(home != NULL, "HOME environment variable should be set");
+    const char *orig_home = getenv("HOME");
 
-    // Replacing leading ~/ with $HOME
+    // 1. With a valid HOME directory
+    setenv("HOME", "/home/testuser", 1);
     expand_tilde_path("~/config", out, sizeof(out));
-    char expected[PATH_MAX];
-    snprintf(expected, sizeof(expected), "%s/config", home);
-    ASSERT_STR_EQ(out, expected);
+    ASSERT_STR_EQ(out, "/home/testuser/config");
 
-    // Replacing leading ~ with $HOME
     expand_tilde_path("~", out, sizeof(out));
-    ASSERT_STR_EQ(out, home);
+    ASSERT_STR_EQ(out, "/home/testuser");
 
-    // Non-tilde paths remaining untouched
+    // 2. With an empty HOME directory
+    setenv("HOME", "", 1);
+    expand_tilde_path("~/config", out, sizeof(out));
+    ASSERT_STR_EQ(out, "~/config");
+
+    expand_tilde_path("~", out, sizeof(out));
+    ASSERT_STR_EQ(out, "~");
+
+    // 3. With unset HOME
+    unsetenv("HOME");
+    expand_tilde_path("~/config", out, sizeof(out));
+    ASSERT_STR_EQ(out, "~/config");
+
+    // 4. Non-tilde paths remaining untouched
     expand_tilde_path("/var/log", out, sizeof(out));
     ASSERT_STR_EQ(out, "/var/log");
 
     expand_tilde_path("relative/path", out, sizeof(out));
     ASSERT_STR_EQ(out, "relative/path");
+
+    // Restore original HOME
+    if (orig_home) {
+        setenv("HOME", orig_home, 1);
+    } else {
+        unsetenv("HOME");
+    }
 }
 
 void test_expand_env_vars(void)
 {
     char out[PATH_MAX];
+    const char *orig_home = getenv("HOME");
 
     setenv("TEST_STOW_VAR1", "/custom/path", 1);
     setenv("TEST_STOW_VAR2", "my_app", 1);
+    setenv("HOME", "/home/testuser", 1);
 
     // 1. POSIX $VAR syntax
     expand_env_vars("$TEST_STOW_VAR1/sub", out, sizeof(out));
@@ -193,13 +212,8 @@ void test_expand_env_vars(void)
     ASSERT_STR_EQ(out, "my_app/config");
 
     // 3. Combination of tilde + env var in expand_tilde_path
-    const char *home = getenv("HOME");
-    if (home) {
-        expand_tilde_path("~/$TEST_STOW_VAR2", out, sizeof(out));
-        char expected[PATH_MAX];
-        snprintf(expected, sizeof(expected), "%s/my_app", home);
-        ASSERT_STR_EQ(out, expected);
-    }
+    expand_tilde_path("~/$TEST_STOW_VAR2", out, sizeof(out));
+    ASSERT_STR_EQ(out, "/home/testuser/my_app");
 
     // 4. Undefined environment variable
     unsetenv("TEST_STOW_UNDEF_XYZ");
@@ -208,6 +222,12 @@ void test_expand_env_vars(void)
 
     unsetenv("TEST_STOW_VAR1");
     unsetenv("TEST_STOW_VAR2");
+
+    if (orig_home) {
+        setenv("HOME", orig_home, 1);
+    } else {
+        unsetenv("HOME");
+    }
 }
 
 void test_degraded_env_path_resolution(void)
