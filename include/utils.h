@@ -30,6 +30,7 @@
 #include <dirent.h>
 #include <fnmatch.h>
 #include <limits.h>
+#include <pwd.h>
 #include <signal.h>
 #include <stdbool.h>
 #include <stdio.h>
@@ -68,13 +69,44 @@ void str_array_append(StringArray *arr, const char *str);
 bool str_array_contains(const StringArray *arr, const char *str);
 void str_array_free(StringArray *arr);
 
-// XDG Base Directory Specification Helpers
+// Environment Helpers
+typedef enum {
+    PATH_VALID = 0,
+    ERR_PATH_EMPTY,
+    ERR_NOT_ABSOLUTE,
+    ERR_NOT_A_DIRECTORY,
+    ERR_NOT_OWNED_BY_USER,
+    ERR_WORLD_WRITABLE,
+    ERR_INSUFFICIENT_PERMS
+} PathSanityResult;
+
+PathSanityResult verify_path_sanity(const char *path);
+PathSanityResult verify_home_path_sanity(const char *path);
+const char *path_sanity_strerror(PathSanityResult res);
+bool get_user_home_dir(char *buf, size_t buf_size);
+
+typedef enum { XDG_CONFIG = 0, XDG_DATA, XDG_CACHE, XDG_STATE } XdgDirType;
+bool get_xdg_dir(XdgDirType type, char *buf, size_t buf_size);
 bool get_xdg_config_home(char *buf, size_t buf_size);
 bool get_xdg_data_home(char *buf, size_t buf_size);
 bool get_xdg_cache_home(char *buf, size_t buf_size);
 bool get_xdg_state_home(char *buf, size_t buf_size);
 void get_xdg_data_dirs(StringArray *dirs);
 void get_xdg_config_dirs(StringArray *dirs);
+
+typedef struct {
+    char home_dir[PATH_MAX];
+    char target_dir[PATH_MAX];
+    char xdg_config_home[PATH_MAX];
+    char xdg_data_home[PATH_MAX];
+    char xdg_cache_home[PATH_MAX];
+    char xdg_state_home[PATH_MAX];
+    bool is_home_validated;
+    bool is_target_override;
+} AppEnvironment;
+
+void app_env_init(AppEnvironment *env);
+bool app_env_resolve(AppEnvironment *env, const char *cli_target_override);
 
 char *trim_whitespace(char *str);
 bool file_exists(const char *path);

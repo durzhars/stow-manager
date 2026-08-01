@@ -124,8 +124,8 @@ void expand_tilde_path(const char *path, char *out, size_t out_size)
     }
     char temp[PATH_MAX * 2];
     if (path[0] == '~' && (path[1] == '/' || path[1] == '\0')) {
-        const char *home = getenv("HOME");
-        if (home && strlen(home) > 0) {
+        char home[PATH_MAX];
+        if (get_user_home_dir(home, sizeof(home))) {
             snprintf(temp, sizeof(temp), "%s%s", home, path + 1);
         } else {
             snprintf(temp, sizeof(temp), "%s", path);
