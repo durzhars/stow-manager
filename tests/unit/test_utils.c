@@ -55,25 +55,69 @@ void test_string_array(void)
 
 void test_xdg_paths(void)
 {
-    const char *home = getenv("HOME");
-    ASSERT(home != NULL && strlen(home) > 0,
-           "HOME environment variable must be set and non-empty for standard XDG path resolution");
+    const char *orig_home = getenv("HOME");
+    const char *orig_xdg_config = getenv("XDG_CONFIG_HOME");
+    const char *orig_xdg_data = getenv("XDG_DATA_HOME");
 
     char cfg_home[PATH_MAX];
-    ASSERT(get_xdg_config_home(cfg_home, sizeof(cfg_home)),
-           "get_xdg_config_home should return true when HOME is set");
-    ASSERT(strlen(cfg_home) > 0, "XDG_CONFIG_HOME path should not be empty");
-
     char data_home[PATH_MAX];
-    ASSERT(get_xdg_data_home(data_home, sizeof(data_home)),
-           "get_xdg_data_home should return true when HOME is set");
-    ASSERT(strlen(data_home) > 0, "XDG_DATA_HOME path should not be empty");
 
+    // 1. Top precedence: Explicit XDG environment variables
+    setenv("XDG_CONFIG_HOME", "/custom/xdg_config", 1);
+    setenv("XDG_DATA_HOME", "/custom/xdg_data", 1);
+    unsetenv("HOME");
+
+    ASSERT(get_xdg_config_home(cfg_home, sizeof(cfg_home)),
+           "get_xdg_config_home should resolve explicit XDG_CONFIG_HOME");
+    ASSERT_STR_EQ(cfg_home, "/custom/xdg_config");
+
+    ASSERT(get_xdg_data_home(data_home, sizeof(data_home)),
+           "get_xdg_data_home should resolve explicit XDG_DATA_HOME");
+    ASSERT_STR_EQ(data_home, "/custom/xdg_data");
+
+    // 2. Second precedence: Fallback to $HOME when XDG variables are unset
+    unsetenv("XDG_CONFIG_HOME");
+    unsetenv("XDG_DATA_HOME");
+    setenv("HOME", "/home/testuser", 1);
+
+    ASSERT(get_xdg_config_home(cfg_home, sizeof(cfg_home)),
+           "get_xdg_config_home should fallback to $HOME/.config when XDG_CONFIG_HOME is unset");
+    ASSERT_STR_EQ(cfg_home, "/home/testuser/.config");
+
+    ASSERT(get_xdg_data_home(data_home, sizeof(data_home)),
+           "get_xdg_data_home should fallback to $HOME/.local/share when XDG_DATA_HOME is unset");
+    ASSERT_STR_EQ(data_home, "/home/testuser/.local/share");
+
+    // 3. Clean failure: Unset both XDG and $HOME
+    unsetenv("HOME");
+    ASSERT(!get_xdg_config_home(cfg_home, sizeof(cfg_home)),
+           "get_xdg_config_home should return false when both XDG and HOME are missing");
+    ASSERT(!get_xdg_data_home(data_home, sizeof(data_home)),
+           "get_xdg_data_home should return false when both XDG and HOME are missing");
+
+    // 4. Default Data Dirs
     StringArray data_dirs;
     str_array_init(&data_dirs);
     get_xdg_data_dirs(&data_dirs);
-    ASSERT(data_dirs.count > 0, "XDG_DATA_DIRS should yield at least 1 directory");
+    ASSERT(data_dirs.count > 0, "XDG_DATA_DIRS should yield at least 1 default directory");
     str_array_free(&data_dirs);
+
+    // Restore original environment
+    if (orig_home) {
+        setenv("HOME", orig_home, 1);
+    } else {
+        unsetenv("HOME");
+    }
+    if (orig_xdg_config) {
+        setenv("XDG_CONFIG_HOME", orig_xdg_config, 1);
+    } else {
+        unsetenv("XDG_CONFIG_HOME");
+    }
+    if (orig_xdg_data) {
+        setenv("XDG_DATA_HOME", orig_xdg_data, 1);
+    } else {
+        unsetenv("XDG_DATA_HOME");
+    }
 }
 
 void test_safe_allocators(void)
