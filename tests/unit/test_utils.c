@@ -210,6 +210,160 @@ void test_expand_env_vars(void)
     unsetenv("TEST_STOW_VAR2");
 }
 
+void test_degraded_env_path_resolution(void)
+{
+    // Save original environment
+    const char *orig_home = getenv("HOME");
+    const char *orig_xdg_cfg = getenv("XDG_CONFIG_HOME");
+    const char *orig_xdg_data = getenv("XDG_DATA_HOME");
+    const char *orig_xdg_cache = getenv("XDG_CACHE_HOME");
+    const char *orig_xdg_state = getenv("XDG_STATE_HOME");
+    const char *orig_xdg_data_dirs = getenv("XDG_DATA_DIRS");
+    const char *orig_xdg_config_dirs = getenv("XDG_CONFIG_DIRS");
+
+    char home_backup[PATH_MAX] = {0};
+    char xdg_cfg_backup[PATH_MAX] = {0};
+    char xdg_data_backup[PATH_MAX] = {0};
+    char xdg_cache_backup[PATH_MAX] = {0};
+    char xdg_state_backup[PATH_MAX] = {0};
+    char xdg_data_dirs_backup[PATH_MAX] = {0};
+    char xdg_config_dirs_backup[PATH_MAX] = {0};
+
+    if (orig_home) {
+        snprintf(home_backup, sizeof(home_backup), "%s", orig_home);
+    }
+    if (orig_xdg_cfg) {
+        snprintf(xdg_cfg_backup, sizeof(xdg_cfg_backup), "%s", orig_xdg_cfg);
+    }
+    if (orig_xdg_data) {
+        snprintf(xdg_data_backup, sizeof(xdg_data_backup), "%s", orig_xdg_data);
+    }
+    if (orig_xdg_cache) {
+        snprintf(xdg_cache_backup, sizeof(xdg_cache_backup), "%s", orig_xdg_cache);
+    }
+    if (orig_xdg_state) {
+        snprintf(xdg_state_backup, sizeof(xdg_state_backup), "%s", orig_xdg_state);
+    }
+    if (orig_xdg_data_dirs) {
+        snprintf(xdg_data_dirs_backup, sizeof(xdg_data_dirs_backup), "%s", orig_xdg_data_dirs);
+    }
+    if (orig_xdg_config_dirs) {
+        snprintf(
+            xdg_config_dirs_backup, sizeof(xdg_config_dirs_backup), "%s", orig_xdg_config_dirs);
+    }
+
+    // --- Scenario 1: Unset / Missing $HOME and Unset XDG Variables ---
+    unsetenv("HOME");
+    unsetenv("XDG_CONFIG_HOME");
+    unsetenv("XDG_DATA_HOME");
+    unsetenv("XDG_CACHE_HOME");
+    unsetenv("XDG_STATE_HOME");
+    unsetenv("XDG_DATA_DIRS");
+    unsetenv("XDG_CONFIG_DIRS");
+
+    char buf[PATH_MAX];
+
+    get_xdg_config_home(buf, sizeof(buf));
+    ASSERT_STR_EQ(buf, "/tmp");
+
+    get_xdg_data_home(buf, sizeof(buf));
+    ASSERT_STR_EQ(buf, "/tmp");
+
+    get_xdg_cache_home(buf, sizeof(buf));
+    ASSERT_STR_EQ(buf, "/tmp");
+
+    get_xdg_state_home(buf, sizeof(buf));
+    ASSERT_STR_EQ(buf, "/tmp");
+
+    get_target_dir(buf, sizeof(buf));
+    ASSERT_STR_EQ(buf, "/tmp");
+
+    expand_tilde_path("~/dotfiles", buf, sizeof(buf));
+    ASSERT_STR_EQ(buf, "~/dotfiles");
+
+    StringArray dirs;
+    str_array_init(&dirs);
+    get_xdg_config_dirs(&dirs);
+    ASSERT(dirs.count == 1, "Should have 1 default config dir");
+    ASSERT_STR_EQ(dirs.items[0], "/etc/xdg");
+    str_array_free(&dirs);
+
+    str_array_init(&dirs);
+    get_xdg_data_dirs(&dirs);
+    ASSERT(dirs.count == 2, "Should have 2 default data dirs");
+    ASSERT_STR_EQ(dirs.items[0], "/usr/local/share");
+    ASSERT_STR_EQ(dirs.items[1], "/usr/share");
+    str_array_free(&dirs);
+
+    // --- Scenario 2: Empty $HOME Variable ---
+    setenv("HOME", "", 1);
+
+    get_xdg_config_home(buf, sizeof(buf));
+    ASSERT_STR_EQ(buf, "/tmp");
+
+    get_target_dir(buf, sizeof(buf));
+    ASSERT_STR_EQ(buf, "/tmp");
+
+    expand_tilde_path("~/myconfig", buf, sizeof(buf));
+    ASSERT_STR_EQ(buf, "~/myconfig");
+
+    // --- Scenario 3: Malformed XDG_DATA_DIRS with empty segments & trailing colons ---
+    setenv("XDG_DATA_DIRS", ":::/custom/share1::/custom/share2:", 1);
+
+    str_array_init(&dirs);
+    get_xdg_data_dirs(&dirs);
+    ASSERT(dirs.count == 2, "Should parse only non-empty paths from malformed XDG_DATA_DIRS");
+    ASSERT_STR_EQ(dirs.items[0], "/custom/share1");
+    ASSERT_STR_EQ(dirs.items[1], "/custom/share2");
+    str_array_free(&dirs);
+
+    // --- Scenario 4: Nested environment variable expansion in XDG variables ---
+    setenv("CUSTOM_BASE", "/opt/stow", 1);
+    setenv("XDG_CONFIG_HOME", "$CUSTOM_BASE/config", 1);
+
+    get_xdg_config_home(buf, sizeof(buf));
+    ASSERT_STR_EQ(buf, "/opt/stow/config");
+
+    unsetenv("CUSTOM_BASE");
+
+    // Restore original environment
+    if (orig_home) {
+        setenv("HOME", home_backup, 1);
+    } else {
+        unsetenv("HOME");
+    }
+    if (orig_xdg_cfg) {
+        setenv("XDG_CONFIG_HOME", xdg_cfg_backup, 1);
+    } else {
+        unsetenv("XDG_CONFIG_HOME");
+    }
+    if (orig_xdg_data) {
+        setenv("XDG_DATA_HOME", xdg_data_backup, 1);
+    } else {
+        unsetenv("XDG_DATA_HOME");
+    }
+    if (orig_xdg_cache) {
+        setenv("XDG_CACHE_HOME", xdg_cache_backup, 1);
+    } else {
+        unsetenv("XDG_CACHE_HOME");
+    }
+    if (orig_xdg_state) {
+        setenv("XDG_STATE_HOME", xdg_state_backup, 1);
+    } else {
+        unsetenv("XDG_STATE_HOME");
+    }
+    if (orig_xdg_data_dirs) {
+        setenv("XDG_DATA_DIRS", xdg_data_dirs_backup, 1);
+    } else {
+        unsetenv("XDG_DATA_DIRS");
+    }
+    if (orig_xdg_config_dirs) {
+        setenv("XDG_CONFIG_DIRS", xdg_config_dirs_backup, 1);
+    } else {
+        unsetenv("XDG_CONFIG_DIRS");
+    }
+}
+
 void test_is_path_prefix(void)
 {
     // True prefix matches
