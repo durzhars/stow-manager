@@ -20,29 +20,26 @@
 #define _DEFAULT_SOURCE
 #define _POSIX_C_SOURCE 200809L
 #include "config.h"
+
 #include "manifest.h"
 
-void config_init(Config *cfg)
-{
+void config_init(Config* cfg) {
     memset(cfg->config_file_path, 0, sizeof(cfg->config_file_path));
     str_array_init(&cfg->dotfiles_dirs);
     memset(cfg->target_dir, 0, sizeof(cfg->target_dir));
     get_config_file_path(cfg->config_file_path, sizeof(cfg->config_file_path));
 }
 
-void config_free(Config *cfg)
-{
-    str_array_free(&cfg->dotfiles_dirs);
-}
+void config_free(Config* cfg) { str_array_free(&cfg->dotfiles_dirs); }
 
-void get_config_file_path(char *buf, size_t buf_size)
-{
+void get_config_file_path(char* buf, size_t buf_size) {
     char xdg_config[PATH_MAX];
     bool has_xdg_config = get_xdg_config_home(xdg_config, sizeof(xdg_config));
 
     if (has_xdg_config) {
         char primary[PATH_MAX * 2];
-        snprintf(primary, sizeof(primary), "%s/stow-manager/config", xdg_config);
+        snprintf(primary, sizeof(primary), "%s/stow-manager/config",
+                 xdg_config);
 
         if (file_exists(primary)) {
             snprintf(buf, buf_size, "%s", primary);
@@ -56,7 +53,8 @@ void get_config_file_path(char *buf, size_t buf_size)
 
     for (size_t i = 0; i < config_dirs.count; i++) {
         char sys_path[PATH_MAX * 2];
-        snprintf(sys_path, sizeof(sys_path), "%s/stow-manager/config", config_dirs.items[i]);
+        snprintf(sys_path, sizeof(sys_path), "%s/stow-manager/config",
+                 config_dirs.items[i]);
         if (file_exists(sys_path)) {
             snprintf(buf, buf_size, "%s", sys_path);
             str_array_free(&config_dirs);
@@ -72,42 +70,44 @@ void get_config_file_path(char *buf, size_t buf_size)
     }
 }
 
-bool config_load(Config *cfg)
-{
+bool config_load(Config* cfg) {
     if (cfg->config_file_path[0] == '\0') {
-        get_config_file_path(cfg->config_file_path, sizeof(cfg->config_file_path));
+        get_config_file_path(cfg->config_file_path,
+                             sizeof(cfg->config_file_path));
     }
     str_array_init(&cfg->dotfiles_dirs);
     memset(cfg->target_dir, 0, sizeof(cfg->target_dir));
 
-    FILE *fp = fopen(cfg->config_file_path, "r");
+    FILE* fp = fopen(cfg->config_file_path, "r");
     if (!fp) {
         return false;
     }
 
-    char *linebuf = NULL;
+    char* linebuf = NULL;
     size_t linecap = 0;
     ssize_t linelen;
 
     while ((linelen = getline(&linebuf, &linecap, fp)) != -1) {
         (void)linelen;
-        char *trimmed = trim_whitespace(linebuf);
+        char* trimmed = trim_whitespace(linebuf);
         if (trimmed[0] == '#' || trimmed[0] == '\0') {
             continue;
         }
 
-        char *eq = strchr(trimmed, '=');
+        char* eq = strchr(trimmed, '=');
         if (eq) {
             *eq = '\0';
-            char *key = trim_whitespace(trimmed);
-            char *val = trim_whitespace(eq + 1);
+            char* key = trim_whitespace(trimmed);
+            char* val = trim_whitespace(eq + 1);
 
-            if (strcmp(key, "DOTFILES_DIR") == 0 || strcmp(key, "DOTFILES_DIRS") == 0) {
-                char *saveptr = NULL;
-                char *token = strtok_r(val, ":", &saveptr);
+            if (strcmp(key, "DOTFILES_DIR") == 0 ||
+                strcmp(key, "DOTFILES_DIRS") == 0) {
+                char* saveptr = NULL;
+                char* token = strtok_r(val, ":", &saveptr);
                 while (token) {
-                    char *p = trim_whitespace(token);
-                    if (strlen(p) > 0 && is_dir(p) && !str_array_contains(&cfg->dotfiles_dirs, p)) {
+                    char* p = trim_whitespace(token);
+                    if (strlen(p) > 0 && is_dir(p) &&
+                        !str_array_contains(&cfg->dotfiles_dirs, p)) {
                         str_array_append(&cfg->dotfiles_dirs, p);
                     }
                     token = strtok_r(NULL, ":", &saveptr);
@@ -123,27 +123,27 @@ bool config_load(Config *cfg)
     return true;
 }
 
-bool config_save(const Config *cfg)
-{
+bool config_save(const Config* cfg) {
     char dir_path[PATH_MAX * 2];
     snprintf(dir_path, sizeof(dir_path), "%s", cfg->config_file_path);
-    char *last_slash = strrchr(dir_path, '/');
+    char* last_slash = strrchr(dir_path, '/');
     if (last_slash) {
         *last_slash = '\0';
         mkdir_p(dir_path, 0755);
     }
 
-    FILE *fp = fopen(cfg->config_file_path, "w");
+    FILE* fp = fopen(cfg->config_file_path, "w");
     if (!fp) {
-        log_error("Failed to open config file for writing: %s", cfg->config_file_path);
+        log_error("Failed to open config file for writing: %s",
+                  cfg->config_file_path);
         return false;
     }
 
     fprintf(fp, "# Stow Manager Configuration\n");
     fprintf(fp, "DOTFILES_DIRS=");
     for (size_t i = 0; i < cfg->dotfiles_dirs.count; i++) {
-        fprintf(
-            fp, "%s%s", cfg->dotfiles_dirs.items[i], (i + 1 < cfg->dotfiles_dirs.count) ? ":" : "");
+        fprintf(fp, "%s%s", cfg->dotfiles_dirs.items[i],
+                (i + 1 < cfg->dotfiles_dirs.count) ? ":" : "");
     }
     fprintf(fp, "\n");
 
@@ -155,8 +155,7 @@ bool config_save(const Config *cfg)
     return true;
 }
 
-void config_set_dotfiles_dir(const char *path)
-{
+void config_set_dotfiles_dir(const char* path) {
     char abs_path[PATH_MAX * 2];
     expand_tilde_path(path, abs_path, sizeof(abs_path));
     normalize_path(abs_path);
@@ -189,8 +188,7 @@ void config_set_dotfiles_dir(const char *path)
     config_free(&cfg);
 }
 
-void config_add_dotfiles_dir(const char *path)
-{
+void config_add_dotfiles_dir(const char* path) {
     char abs_path[PATH_MAX * 2];
     expand_tilde_path(path, abs_path, sizeof(abs_path));
     normalize_path(abs_path);
@@ -216,8 +214,7 @@ void config_add_dotfiles_dir(const char *path)
     config_free(&cfg);
 }
 
-void config_remove_dotfiles_dir(const char *path)
-{
+void config_remove_dotfiles_dir(const char* path) {
     char abs_path[PATH_MAX * 2];
     expand_tilde_path(path, abs_path, sizeof(abs_path));
     normalize_path(abs_path);
@@ -252,8 +249,7 @@ void config_remove_dotfiles_dir(const char *path)
     config_free(&cfg);
 }
 
-void config_set_target_dir(const char *path)
-{
+void config_set_target_dir(const char* path) {
     char abs_path[PATH_MAX];
     expand_tilde_path(path, abs_path, sizeof(abs_path));
     normalize_path(abs_path);
@@ -270,8 +266,7 @@ void config_set_target_dir(const char *path)
     config_free(&cfg);
 }
 
-void config_show(void)
-{
+void config_show(void) {
     Config cfg;
     config_init(&cfg);
     (void)config_load(&cfg);
@@ -281,22 +276,29 @@ void config_show(void)
 
     printf("  Dotfiles Repositories:\n");
     if (cfg.dotfiles_dirs.count == 0) {
-        printf("    (none configured - using current working directory fallback)\n");
+        printf(
+            "    (none configured - using current working directory "
+            "fallback)\n");
     } else {
         for (size_t i = 0; i < cfg.dotfiles_dirs.count; i++) {
-            printf(
-                "    %zu. %s%s\n", i + 1, cfg.dotfiles_dirs.items[i], (i == 0) ? " (primary)" : "");
+            printf("    %zu. %s%s\n", i + 1, cfg.dotfiles_dirs.items[i],
+                   (i == 0) ? " (primary)" : "");
         }
     }
 
     if (cfg.target_dir[0] != '\0') {
         printf("  Target Directory: %s (configured)\n", cfg.target_dir);
     } else {
+        const char* env_home = getenv("HOME");
         char default_target[PATH_MAX];
-        if (get_target_dir(default_target, sizeof(default_target))) {
-            printf("  Target Directory: %s (fallback environment $HOME)\n", default_target);
+        if (env_home && *env_home != '\0' &&
+            get_target_dir(default_target, sizeof(default_target))) {
+            printf("  Target Directory: %s (fallback environment $HOME)\n",
+                   default_target);
         } else {
-            printf("  Target Directory: (none - $HOME environment variable is not set)\n");
+            printf(
+                "  Target Directory: (none - $HOME environment variable is not "
+                "set)\n");
         }
     }
     printf("\n");
@@ -304,15 +306,15 @@ void config_show(void)
     config_free(&cfg);
 }
 
-void get_active_dotfiles_dir(const char *cli_override, char *buf, size_t buf_size)
-{
+void get_active_dotfiles_dir(const char* cli_override, char* buf,
+                             size_t buf_size) {
     if (cli_override && strlen(cli_override) > 0) {
         expand_tilde_path(cli_override, buf, buf_size);
         normalize_path(buf);
         return;
     }
 
-    const char *env_dir = getenv("STOW_DOTFILES_DIR");
+    const char* env_dir = getenv("STOW_DOTFILES_DIR");
     if (!env_dir) {
         env_dir = getenv("DOTFILES_DIR");
     }
@@ -346,15 +348,15 @@ void get_active_dotfiles_dir(const char *cli_override, char *buf, size_t buf_siz
     get_dotfiles_dir(buf, buf_size);
 }
 
-void get_active_target_dir(const char *cli_override, char *buf, size_t buf_size)
-{
+void get_active_target_dir(const char* cli_override, char* buf,
+                           size_t buf_size) {
     if (cli_override && strlen(cli_override) > 0) {
         expand_tilde_path(cli_override, buf, buf_size);
         normalize_path(buf);
         return;
     }
 
-    const char *env_target = getenv("STOW_TARGET_DIR");
+    const char* env_target = getenv("STOW_TARGET_DIR");
     if (!env_target) {
         env_target = getenv("TARGET_DIR");
     }
@@ -373,20 +375,22 @@ void get_active_target_dir(const char *cli_override, char *buf, size_t buf_size)
     }
     config_free(&cfg);
 
+    const char* env_home = getenv("HOME");
+    if (!env_home || *env_home == '\0') {
+        log_error("Fatal: $HOME environment variable is not set");
+        exit(EXIT_FAILURE);
+    }
+
     if (!get_target_dir(buf, buf_size)) {
-        log_error(
-            "Fatal: $HOME environment variable is not set and no target directory was configured "
-            "(-t / --target-dir). Exiting.");
+        log_error("Fatal: $HOME environment variable is not set");
         exit(EXIT_FAILURE);
     }
 }
 
-void get_active_target_dir_for_pkg(const char *cli_override,
-                                   const char *dotfiles_dir,
-                                   const char *pkg_name,
-                                   char *buf,
-                                   size_t buf_size)
-{
+void get_active_target_dir_for_pkg(const char* cli_override,
+                                   const char* dotfiles_dir,
+                                   const char* pkg_name, char* buf,
+                                   size_t buf_size) {
     if (cli_override && strlen(cli_override) > 0) {
         expand_tilde_path(cli_override, buf, buf_size);
         normalize_path(buf);
