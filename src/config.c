@@ -290,11 +290,10 @@ void config_show(void) {
         printf("  Target Directory: %s (configured)\n", cfg.target_dir);
     } else {
         const char* env_home = getenv("HOME");
-        char default_target[PATH_MAX];
         if (env_home && *env_home != '\0' &&
-            get_target_dir(default_target, sizeof(default_target))) {
+            verify_path_sanity(env_home) == PATH_VALID) {
             printf("  Target Directory: %s (fallback environment $HOME)\n",
-                   default_target);
+                   env_home);
         } else {
             printf(
                 "  Target Directory: (none - $HOME environment variable is not "
@@ -381,10 +380,12 @@ void get_active_target_dir(const char* cli_override, char* buf,
         exit(EXIT_FAILURE);
     }
 
-    if (!get_target_dir(buf, buf_size)) {
+    if (verify_path_sanity(env_home) != PATH_VALID) {
         log_error("Fatal: $HOME environment variable is not set");
         exit(EXIT_FAILURE);
     }
+
+    snprintf(buf, buf_size, "%s", env_home);
 }
 
 void get_active_target_dir_for_pkg(const char* cli_override,
