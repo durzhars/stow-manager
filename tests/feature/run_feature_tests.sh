@@ -38,6 +38,7 @@ TEST_SUITES=(
     "test_config_cmd.sh"
     "test_deps_cmd.sh"
     "test_inspection_cmd.sh"
+    "test_degraded_env_cmd.sh"
 )
 
 SUITES_PASSED=0
