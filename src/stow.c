@@ -33,6 +33,44 @@ static void get_timestamp_str(char* buf, size_t size) {
     }
 }
 
+// Resolves symlink_path and checks if it points into dotfiles_dir.
+// If so, extracts the owner package name into owner_pkg_buf.
+static bool get_symlink_owner_package(const char* symlink_path,
+                                      const char* dotfiles_dir,
+                                      char* owner_pkg_buf, size_t buf_size) {
+    char real_dotfiles[PATH_MAX];
+    if (realpath(dotfiles_dir, real_dotfiles) == NULL) {
+        snprintf(real_dotfiles, sizeof(real_dotfiles), "%s", dotfiles_dir);
+    }
+
+    char real_target[PATH_MAX];
+    if (realpath(symlink_path, real_target) == NULL) {
+        return false;
+    }
+
+    if (is_path_prefix(real_target, real_dotfiles)) {
+        size_t prefix_len = strlen(real_dotfiles);
+        const char* rel = real_target + prefix_len;
+        while (*rel == '/') {
+            rel++;
+        }
+
+        const char* slash = strchr(rel, '/');
+        if (slash) {
+            size_t pkg_len = (size_t)(slash - rel);
+            if (pkg_len > 0 && pkg_len < buf_size) {
+                strncpy(owner_pkg_buf, rel, pkg_len);
+                owner_pkg_buf[pkg_len] = '\0';
+                return true;
+            }
+        } else if (strlen(rel) > 0 && strlen(rel) < buf_size) {
+            snprintf(owner_pkg_buf, buf_size, "%s", rel);
+            return true;
+        }
+    }
+    return false;
+}
+
 typedef struct {
     const char* dotfiles_dir;
     bool dry_run;
@@ -114,6 +152,8 @@ void unfold_directory_symlinks(const char* target_dir, const char* dotfiles_dir,
 
 typedef struct {
     const char* target_dir;
+    const char* dotfiles_dir;
+    const char* pkg_name;
     const char* pkg_dir;
     const char* real_pkg_dir;
     const StringArray* raw_ignores;
@@ -148,9 +188,25 @@ static void prepare_conflict_cb(const char* file_path, const char* rel_path,
                                    real_pkg_file_path)) {
             ctx->unchanged++;
         } else {
-            if (ctx->dry_run) {
-                log_info("[DRY-RUN] Would replace symlink: %s -> %s",
-                         target_path, pkg_file_path);
+            char owner_pkg[256];
+            if (get_symlink_owner_package(target_path, ctx->dotfiles_dir,
+                                          owner_pkg, sizeof(owner_pkg))) {
+                if (ctx->dry_run) {
+                    log_warn(
+                        "[DRY-RUN] Conflict! Target '%s' is stowed by "
+                        "package '%s'. Would replace with '%s'.",
+                        rel_path, owner_pkg, ctx->pkg_name);
+                } else {
+                    log_warn(
+                        "Conflict! Target '%s' is stowed by package '%s'. "
+                        "Replacing with '%s'...",
+                        rel_path, owner_pkg, ctx->pkg_name);
+                }
+            } else {
+                if (ctx->dry_run) {
+                    log_info("[DRY-RUN] Would replace symlink: %s -> %s",
+                             target_path, pkg_file_path);
+                }
             }
             ctx->replaced_links++;
         }
@@ -211,7 +267,6 @@ static void native_stow_cb(const char* file_path, const char* rel_path,
         }
         unlink(target_path);
     } else if (file_exists(target_path)) {
-        // Back up conflicting existing regular file
         char ts[64];
         get_timestamp_str(ts, sizeof(ts));
         char backup_path[PATH_MAX * 3];
@@ -336,8 +391,17 @@ void prepare_target_conflicts(const char* target_dir, const char* dotfiles_dir,
     parse_stowignore_raw(dotfiles_dir, &raw_ignores);
     parse_stowignore_raw(pkg_dir, &raw_ignores);
 
-    ConflictContext ctx = {
-        target_dir, pkg_dir, real_pkg_dir, &raw_ignores, dry_run, 0, 0, 0, 0};
+    ConflictContext ctx = {target_dir,
+                           dotfiles_dir,
+                           pkg_name,
+                           pkg_dir,
+                           real_pkg_dir,
+                           &raw_ignores,
+                           dry_run,
+                           0,
+                           0,
+                           0,
+                           0};
     walk_dir_files(pkg_dir, "", prepare_conflict_cb, &ctx);
 
     if (dry_run) {
@@ -447,12 +511,13 @@ void handle_mutual_exclusions(const char* target_dir, const char* dotfiles_dir,
         if (is_package_stowed(target_dir, dotfiles_dir, conflict_pkg)) {
             if (dry_run) {
                 log_warn(
-                    "[DRY-RUN] Would unstow conflicting package '%s' before "
-                    "stowing '%s'.",
+                    "[DRY-RUN] Would unstow manifest-conflicting package '%s' "
+                    "before stowing '%s'.",
                     conflict_pkg, pkg_name);
             } else {
                 log_warn(
-                    "Unstowing conflicting package '%s' before stowing '%s'...",
+                    "Unstowing manifest-conflicting package '%s' before "
+                    "stowing '%s'...",
                     conflict_pkg, pkg_name);
                 unstow_package(dotfiles_dir, target_dir, conflict_pkg, dry_run);
             }
@@ -460,6 +525,86 @@ void handle_mutual_exclusions(const char* target_dir, const char* dotfiles_dir,
     }
 
     manifest_free(&manifest);
+}
+
+typedef struct {
+    const char* target_dir;
+    const char* dotfiles_dir;
+    const char* current_pkg;
+    const StringArray* raw_ignores;
+    StringArray conflicting_pkgs;
+} DetectConflictsContext;
+
+static void detect_conflicts_cb(const char* file_path, const char* rel_path,
+                                void* user_data) {
+    (void)file_path;
+    DetectConflictsContext* ctx = (DetectConflictsContext*)user_data;
+
+    if (is_path_ignored(rel_path, ctx->raw_ignores)) {
+        return;
+    }
+
+    char target_path[PATH_MAX * 2];
+    join_path(target_path, sizeof(target_path), ctx->target_dir, rel_path);
+
+    if (is_symlink(target_path)) {
+        char owner_pkg[256];
+        if (get_symlink_owner_package(target_path, ctx->dotfiles_dir, owner_pkg,
+                                      sizeof(owner_pkg))) {
+            if (strcmp(owner_pkg, ctx->current_pkg) != 0) {
+                if (!str_array_contains(&ctx->conflicting_pkgs, owner_pkg)) {
+                    str_array_append(&ctx->conflicting_pkgs, owner_pkg);
+                }
+            }
+        }
+    }
+}
+
+// Scans target paths for symlinks belonging to other packages and unstows them
+void handle_dynamic_package_conflicts(const char* target_dir,
+                                      const char* dotfiles_dir,
+                                      const char* pkg_name, bool dry_run) {
+    char pkg_dir[PATH_MAX * 2];
+    join_path(pkg_dir, sizeof(pkg_dir), dotfiles_dir, pkg_name);
+
+    if (!is_dir(pkg_dir)) {
+        return;
+    }
+
+    StringArray raw_ignores;
+    str_array_init(&raw_ignores);
+    get_default_stowignore(&raw_ignores);
+    parse_stowignore_raw(dotfiles_dir, &raw_ignores);
+    parse_stowignore_raw(pkg_dir, &raw_ignores);
+
+    DetectConflictsContext ctx;
+    ctx.target_dir = target_dir;
+    ctx.dotfiles_dir = dotfiles_dir;
+    ctx.current_pkg = pkg_name;
+    ctx.raw_ignores = &raw_ignores;
+    str_array_init(&ctx.conflicting_pkgs);
+
+    walk_dir_files(pkg_dir, "", detect_conflicts_cb, &ctx);
+
+    for (size_t i = 0; i < ctx.conflicting_pkgs.count; i++) {
+        const char* conflict_pkg = ctx.conflicting_pkgs.items[i];
+        if (dry_run) {
+            log_warn(
+                "[DRY-RUN] Package conflict detected! Package '%s' collides "
+                "with stowed package '%s'. Would unstow '%s' before stowing "
+                "'%s'.",
+                pkg_name, conflict_pkg, conflict_pkg, pkg_name);
+        } else {
+            log_warn(
+                "Package conflict detected! Package '%s' collides with "
+                "stowed package '%s'. Unstowing '%s' before stowing '%s'...",
+                pkg_name, conflict_pkg, conflict_pkg, pkg_name);
+            unstow_package(dotfiles_dir, target_dir, conflict_pkg, false);
+        }
+    }
+
+    str_array_free(&ctx.conflicting_pkgs);
+    str_array_free(&raw_ignores);
 }
 
 int stow_package(const char* dotfiles_dir, const char* target_dir,
@@ -473,6 +618,8 @@ int stow_package(const char* dotfiles_dir, const char* target_dir,
 
     check_package_dependencies(dotfiles_dir, pkg_name, auto_install, dry_run);
     handle_mutual_exclusions(target_dir, dotfiles_dir, pkg_name, dry_run);
+    handle_dynamic_package_conflicts(target_dir, dotfiles_dir, pkg_name,
+                                     dry_run);
     unfold_directory_symlinks(target_dir, dotfiles_dir, dry_run);
     prepare_target_conflicts(target_dir, dotfiles_dir, pkg_name, dry_run);
 
@@ -571,6 +718,8 @@ int restow_package(const char* dotfiles_dir, const char* target_dir,
 
     check_package_dependencies(dotfiles_dir, pkg_name, auto_install, dry_run);
     handle_mutual_exclusions(target_dir, dotfiles_dir, pkg_name, dry_run);
+    handle_dynamic_package_conflicts(target_dir, dotfiles_dir, pkg_name,
+                                     dry_run);
     unfold_directory_symlinks(target_dir, dotfiles_dir, dry_run);
 
     if (dry_run) {
