@@ -45,6 +45,9 @@ void test_is_executable_in_path(void);
 void test_get_all_packages_skips_dot_dirs(void);
 void test_default_stowignore(void);
 void test_is_symlink_pointing_to(void);
+void test_walk_dir_files_and_cleanup(void);
+void test_path_sanity_strerror(void);
+void test_temp_path_registration(void);
 
 /* Prototypes from test_manifest.c */
 void test_manifest_load_save(void);
@@ -81,7 +84,24 @@ void test_scan_package(void);
 /* Prototypes from test_registry.c */
 void test_registry_parsing(void);
 
-int main(void) {
+/* Prototypes from test_ignore.c */
+void test_ignore_init_and_clear(void);
+void test_ignore_add_and_remove_patterns(void);
+void test_ignore_show(void);
+
+/* Prototypes from test_cli.c */
+void test_parse_cli_options_flags(void);
+void test_parse_cli_options_directory_overrides(void);
+void test_parse_cli_options_errors_and_help(void);
+
+/* Prototypes from test_dispatch.c */
+void test_dispatch_command_routes(void);
+
+/* Prototypes from test_checker.c */
+void test_check_package_dependencies(void);
+
+int main(void)
+{
     printf("\n=== Running Dotfiles Stow Manager C Unit Tests ===\n\n");
 
     // test_utils.c
@@ -104,6 +124,9 @@ int main(void) {
     RUN_TEST(test_default_stowignore);
     RUN_TEST(test_is_symlink_pointing_to);
     RUN_TEST(test_mkdir_p_file_collision);
+    RUN_TEST(test_walk_dir_files_and_cleanup);
+    RUN_TEST(test_path_sanity_strerror);
+    RUN_TEST(test_temp_path_registration);
 
     // test_manifest.c
     RUN_TEST(test_manifest_load_save);
@@ -140,8 +163,25 @@ int main(void) {
     // test_registry.c
     RUN_TEST(test_registry_parsing);
 
+    // test_ignore.c
+    RUN_TEST(test_ignore_init_and_clear);
+    RUN_TEST(test_ignore_add_and_remove_patterns);
+    RUN_TEST(test_ignore_show);
+
+    // test_cli.c
+    RUN_TEST(test_parse_cli_options_flags);
+    RUN_TEST(test_parse_cli_options_directory_overrides);
+    RUN_TEST(test_parse_cli_options_errors_and_help);
+
+    // test_dispatch.c
+    RUN_TEST(test_dispatch_command_routes);
+
+    // test_checker.c
+    RUN_TEST(test_check_package_dependencies);
+
     printf("\n=== Test Results: %d Passed, %d Failed ===\n\n",
-           g_tests_run - g_tests_failed, g_tests_failed);
+           g_tests_run - g_tests_failed,
+           g_tests_failed);
 
     return g_tests_failed == 0 ? 0 : 1;
 }

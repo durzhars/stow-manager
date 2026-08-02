@@ -16,29 +16,21 @@
  * along with this program. If not, see <https://www.gnu.org/licenses/>.
  */
 
-#define _GNU_SOURCE
-#define _POSIX_C_SOURCE 200809L
+#ifndef STOW_CLI_H
+#define STOW_CLI_H
 
-#include "cli.h"
-#include "cmd_dispatch.h"
+#include <stdbool.h>
+
 #include "utils.h"
 
-int main(int argc, char **argv)
-{
-    setup_signal_handlers();
+typedef struct {
+    bool auto_install;
+    bool dry_run;
+    bool save_flag;
+    const char *cli_dotfiles_dir;
+    const char *cli_target_dir;
+} CliOptions;
 
-    CliOptions opts;
-    StringArray args;
-    str_array_init(&args);
+int parse_cli_options(int argc, char **argv, CliOptions *opts, StringArray *positional_args);
 
-    int parse_res = parse_cli_options(argc, argv, &opts, &args);
-    if (parse_res != 0) {
-        str_array_free(&args);
-        return (parse_res < 0) ? 0 : 1;
-    }
-
-    int status = dispatch_command(&args, &opts);
-
-    str_array_free(&args);
-    return status;
-}
+#endif /* STOW_CLI_H */
