@@ -22,6 +22,7 @@ TEST_FEATURE_DIR = $(TEST_DIR)/feature
 SRCS = $(SRC_DIR)/main.c \
 	   $(SRC_DIR)/cli.c \
 	   $(SRC_DIR)/cmd_dispatch.c \
+	   $(SRC_DIR)/ignore.c \
        $(SRC_DIR)/help.c \
        $(SRC_DIR)/logger.c \
        $(SRC_DIR)/utils/mem.c \

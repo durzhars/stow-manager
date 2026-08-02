@@ -37,6 +37,7 @@ TEST_SUITES=(
     "test_stow_cmd.sh"
     "test_config_cmd.sh"
     "test_deps_cmd.sh"
+    "test_ignore_cmd.sh"
     "test_inspection_cmd.sh"
     "test_degraded_env_cmd.sh"
 )
