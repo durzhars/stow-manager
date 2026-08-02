@@ -32,17 +32,18 @@
 #include "utils.h"
 
 typedef struct {
-    const char* env_var;
-    const char* default_rel;
+    const char *env_var;
+    const char *default_rel;
 } XdgMapping;
 
-static bool is_var_start_char(char c) {
+static bool is_var_start_char(char c)
+{
     return (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c == '_');
 }
 
-static bool is_var_body_char(char c) {
-    return (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') ||
-           (c >= '0' && c <= '9') || (c == '_');
+static bool is_var_body_char(char c)
+{
+    return (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || (c == '_');
 }
 
 static const XdgMapping XDG_TABLE[] = {
@@ -52,13 +53,14 @@ static const XdgMapping XDG_TABLE[] = {
     [XDG_STATE] = {"XDG_STATE_HOME", ".local/state"},
 };
 
-static bool resolve_xdg_path(const char* env_var, const char* default_rel,
-                             char* buf, size_t buf_size) {
+static bool
+resolve_xdg_path(const char *env_var, const char *default_rel, char *buf, size_t buf_size)
+{
     if (!buf || buf_size == 0) {
         return false;
     }
 
-    const char* env = getenv(env_var);
+    const char *env = getenv(env_var);
     if (env && strlen(env) > 0) {
         char expanded[PATH_MAX * 2];
         expand_env_vars(env, expanded, sizeof(expanded));
@@ -78,7 +80,8 @@ static bool resolve_xdg_path(const char* env_var, const char* default_rel,
     return false;
 }
 
-void expand_env_vars(const char* src, char* out, size_t out_size) {
+void expand_env_vars(const char *src, char *out, size_t out_size)
+{
     if (!src || !out || out_size == 0) {
         return;
     }
@@ -93,12 +96,11 @@ void expand_env_vars(const char* src, char* out, size_t out_size) {
                 size_t j = i + 2;
                 char varname[256] = {0};
                 size_t vn = 0;
-                while (j < srclen && src[j] != '}' &&
-                       vn + 1 < sizeof(varname)) {
+                while (j < srclen && src[j] != '}' && vn + 1 < sizeof(varname)) {
                     varname[vn++] = src[j++];
                 }
                 if (j < srclen && src[j] == '}' && vn > 0) {
-                    const char* val = getenv(varname);
+                    const char *val = getenv(varname);
                     if (val) {
                         size_t vlen = strlen(val);
                         for (size_t k = 0; k < vlen && o + 1 < out_size; k++) {
@@ -113,11 +115,10 @@ void expand_env_vars(const char* src, char* out, size_t out_size) {
                 size_t j = i + 1;
                 char varname[256] = {0};
                 size_t vn = 0;
-                while (j < srclen && is_var_body_char(src[j]) &&
-                       vn + 1 < sizeof(varname)) {
+                while (j < srclen && is_var_body_char(src[j]) && vn + 1 < sizeof(varname)) {
                     varname[vn++] = src[j++];
                 }
-                const char* val = getenv(varname);
+                const char *val = getenv(varname);
                 if (val) {
                     size_t vlen = strlen(val);
                     for (size_t k = 0; k < vlen && o + 1 < out_size; k++) {
@@ -135,7 +136,8 @@ void expand_env_vars(const char* src, char* out, size_t out_size) {
     out[o] = '\0';
 }
 
-PathSanityResult verify_path_sanity(const char* path) {
+PathSanityResult verify_path_sanity(const char *path)
+{
     if (!path || *path == '\0') {
         return ERR_PATH_EMPTY;
     }
@@ -154,11 +156,11 @@ PathSanityResult verify_path_sanity(const char* path) {
         return ERR_NOT_A_DIRECTORY;
     }
 
-    if (st.st_uid != getuid()) {
+    if (getuid() != 0 && st.st_uid != getuid()) {
         return ERR_NOT_OWNED_BY_USER;
     }
 
-    if (st.st_mode & S_IWOTH) {
+    if ((st.st_mode & S_IWOTH) && !(st.st_mode & S_ISVTX)) {
         return ERR_WORLD_WRITABLE;
     }
 
@@ -169,12 +171,13 @@ PathSanityResult verify_path_sanity(const char* path) {
     return PATH_VALID;
 }
 
-bool get_user_home_dir(char* buf, size_t buf_size) {
+bool get_user_home_dir(char *buf, size_t buf_size)
+{
     if (!buf || buf_size == 0) {
         return false;
     }
 
-    const char* home = getenv("HOME");
+    const char *home = getenv("HOME");
     if (home && *home != '\0') {
         if (verify_path_sanity(home) == PATH_VALID) {
             snprintf(buf, buf_size, "%s", home);
@@ -183,11 +186,10 @@ bool get_user_home_dir(char* buf, size_t buf_size) {
     }
 
     struct passwd pwd;
-    struct passwd* result = NULL;
+    struct passwd *result = NULL;
     char pwbuf[1024];
 
-    if (getpwuid_r(getuid(), &pwd, pwbuf, sizeof(pwbuf), &result) == 0 &&
-        result != NULL) {
+    if (getpwuid_r(getuid(), &pwd, pwbuf, sizeof(pwbuf), &result) == 0 && result != NULL) {
         if (pwd.pw_dir && verify_path_sanity(pwd.pw_dir) == PATH_VALID) {
             snprintf(buf, buf_size, "%s", pwd.pw_dir);
             return true;
@@ -198,58 +200,65 @@ bool get_user_home_dir(char* buf, size_t buf_size) {
     return false;
 }
 
-const char* path_sanity_strerror(PathSanityResult res) {
+const char *path_sanity_strerror(PathSanityResult res)
+{
     switch (res) {
-        case PATH_VALID:
-            return "path is valid";
-        case ERR_PATH_EMPTY:
-            return "path string is empty or NULL";
-        case ERR_NOT_ABSOLUTE:
-            return "path is not an absolute path (must start with '/')";
-        case ERR_NOT_A_DIRECTORY:
-            return "path is not a directory (e.g. /dev/null or regular file)";
-        case ERR_NOT_OWNED_BY_USER:
-            return "directory owner UID does not match running process UID";
-        case ERR_WORLD_WRITABLE:
-            return "directory is world-writable (security violation, e.g. 1777 "
-                   "/tmp)";
-        case ERR_INSUFFICIENT_PERMS:
-            return "insufficient permissions (requires read, write, and "
-                   "search/execute access)";
-        default:
-            return "unknown path sanity error";
+    case PATH_VALID:
+        return "path is valid";
+    case ERR_PATH_EMPTY:
+        return "path string is empty or NULL";
+    case ERR_NOT_ABSOLUTE:
+        return "path is not an absolute path (must start with '/')";
+    case ERR_NOT_A_DIRECTORY:
+        return "path is not a directory (e.g. /dev/null or regular file)";
+    case ERR_NOT_OWNED_BY_USER:
+        return "directory owner UID does not match running process UID";
+    case ERR_WORLD_WRITABLE:
+        return "directory is world-writable (security violation, e.g. 1777 "
+               "/tmp)";
+    case ERR_INSUFFICIENT_PERMS:
+        return "insufficient permissions (requires read, write, and "
+               "search/execute access)";
+    default:
+        return "unknown path sanity error";
     }
 }
 
-PathSanityResult verify_home_path_sanity(const char* path) {
+PathSanityResult verify_home_path_sanity(const char *path)
+{
     return verify_path_sanity(path);
 }
 
-bool get_xdg_config_home(char* buf, size_t buf_size) {
+bool get_xdg_config_home(char *buf, size_t buf_size)
+{
     return get_xdg_dir(XDG_CONFIG, buf, buf_size);
 }
 
-bool get_xdg_data_home(char* buf, size_t buf_size) {
+bool get_xdg_data_home(char *buf, size_t buf_size)
+{
     return get_xdg_dir(XDG_DATA, buf, buf_size);
 }
 
-bool get_xdg_cache_home(char* buf, size_t buf_size) {
+bool get_xdg_cache_home(char *buf, size_t buf_size)
+{
     return get_xdg_dir(XDG_CACHE, buf, buf_size);
 }
 
-bool get_xdg_state_home(char* buf, size_t buf_size) {
+bool get_xdg_state_home(char *buf, size_t buf_size)
+{
     return get_xdg_dir(XDG_STATE, buf, buf_size);
 }
 
-void get_xdg_data_dirs(StringArray* dirs) {
-    const char* env = getenv("XDG_DATA_DIRS");
+void get_xdg_data_dirs(StringArray *dirs)
+{
+    const char *env = getenv("XDG_DATA_DIRS");
     if (!env || strlen(env) == 0) {
         env = "/usr/local/share:/usr/share";
     }
-    char* copy = safe_strdup(env);
+    char *copy = safe_strdup(env);
 
-    char* saveptr = NULL;
-    char* token = strtok_r(copy, ":", &saveptr);
+    char *saveptr = NULL;
+    char *token = strtok_r(copy, ":", &saveptr);
     while (token) {
         if (strlen(token) > 0) {
             char expanded[PATH_MAX * 2];
@@ -261,15 +270,16 @@ void get_xdg_data_dirs(StringArray* dirs) {
     free(copy);
 }
 
-void get_xdg_config_dirs(StringArray* dirs) {
-    const char* env = getenv("XDG_CONFIG_DIRS");
+void get_xdg_config_dirs(StringArray *dirs)
+{
+    const char *env = getenv("XDG_CONFIG_DIRS");
     if (!env || strlen(env) == 0) {
         env = "/etc/xdg";
     }
-    char* copy = safe_strdup(env);
+    char *copy = safe_strdup(env);
 
-    char* saveptr = NULL;
-    char* token = strtok_r(copy, ":", &saveptr);
+    char *saveptr = NULL;
+    char *token = strtok_r(copy, ":", &saveptr);
     while (token) {
         if (strlen(token) > 0) {
             char expanded[PATH_MAX * 2];
@@ -281,7 +291,8 @@ void get_xdg_config_dirs(StringArray* dirs) {
     free(copy);
 }
 
-void app_env_init(AppEnvironment* env) {
+void app_env_init(AppEnvironment *env)
+{
     if (!env) {
         return;
     }
@@ -295,7 +306,8 @@ void app_env_init(AppEnvironment* env) {
     env->is_target_override = false;
 }
 
-bool app_env_resolve(AppEnvironment* env, const char* cli_target_override) {
+bool app_env_resolve(AppEnvironment *env, const char *cli_target_override)
+{
     if (!env) {
         return false;
     }
@@ -303,23 +315,20 @@ bool app_env_resolve(AppEnvironment* env, const char* cli_target_override) {
 
     // Phase 1 & 5: CLI Target Override
     if (cli_target_override && strlen(cli_target_override) > 0) {
-        expand_tilde_path(cli_target_override, env->target_dir,
-                          sizeof(env->target_dir));
+        expand_tilde_path(cli_target_override, env->target_dir, sizeof(env->target_dir));
         normalize_path(env->target_dir);
         env->is_target_override = true;
     }
 
     // Phase 2 & 3: Resolve & Validate Raw $HOME Candidate
-    env->is_home_validated =
-        get_user_home_dir(env->home_dir, sizeof(env->home_dir));
+    env->is_home_validated = get_user_home_dir(env->home_dir, sizeof(env->home_dir));
 
     if (!env->is_home_validated) {
         if (!env->is_target_override) {
-            const char* raw_home = getenv("HOME");
+            const char *raw_home = getenv("HOME");
             PathSanityResult reason = verify_home_path_sanity(raw_home);
-            log_error(
-                "Fatal: Invalid or missing $HOME directory (%s). Exiting.",
-                path_sanity_strerror(reason));
+            log_error("Fatal: Invalid or missing $HOME directory (%s). Exiting.",
+                      path_sanity_strerror(reason));
             return false;
         }
     } else if (!env->is_target_override) {
@@ -335,24 +344,26 @@ bool app_env_resolve(AppEnvironment* env, const char* cli_target_override) {
     return true;
 }
 
-bool get_xdg_dir(XdgDirType type, char* buf, size_t buf_size) {
+bool get_xdg_dir(XdgDirType type, char *buf, size_t buf_size)
+{
     if (type < XDG_CONFIG || type > XDG_STATE) {
         return false;
     }
 
-    const XdgMapping* spec = &XDG_TABLE[type];
+    const XdgMapping *spec = &XDG_TABLE[type];
     return resolve_xdg_path(spec->env_var, spec->default_rel, buf, buf_size);
 }
 
-void get_distro_id(char* buf, size_t buf_size) {
+void get_distro_id(char *buf, size_t buf_size)
+{
     buf[0] = '\0';
-    FILE* fp = fopen("/etc/os-release", "r");
+    FILE *fp = fopen("/etc/os-release", "r");
     if (fp) {
         char line[256];
         while (fgets(line, sizeof(line), fp)) {
             if (strncmp(line, "ID=", 3) == 0) {
-                char* val = line + 3;
-                char* trimmed = trim_whitespace(val);
+                char *val = line + 3;
+                char *trimmed = trim_whitespace(val);
                 snprintf(buf, buf_size, "%s", trimmed);
                 fclose(fp);
                 return;
@@ -363,7 +374,8 @@ void get_distro_id(char* buf, size_t buf_size) {
     snprintf(buf, buf_size, "unknown");
 }
 
-bool is_executable_in_path(const char* executable) {
+bool is_executable_in_path(const char *executable)
+{
     if (!executable || strlen(executable) == 0) {
         return false;
     }
@@ -372,14 +384,14 @@ bool is_executable_in_path(const char* executable) {
         return access(executable, X_OK) == 0;
     }
 
-    const char* path_env = getenv("PATH");
+    const char *path_env = getenv("PATH");
     if (!path_env) {
         return false;
     }
 
-    char* path_copy = safe_strdup(path_env);
-    char* saveptr = NULL;
-    char* token = strtok_r(path_copy, ":", &saveptr);
+    char *path_copy = safe_strdup(path_env);
+    char *saveptr = NULL;
+    char *token = strtok_r(path_copy, ":", &saveptr);
     bool found = false;
     char full_path[PATH_MAX * 2];
 
@@ -396,4 +408,7 @@ bool is_executable_in_path(const char* executable) {
     return found;
 }
 
-int run_system_cmd(const char* cmd) { return system(cmd); }
+int run_system_cmd(const char *cmd)
+{
+    return system(cmd);
+}

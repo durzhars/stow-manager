@@ -30,12 +30,13 @@
 
 #include "utils.h"
 
-void normalize_path(char* path) {
+void normalize_path(char *path)
+{
     if (!path || *path == '\0') {
         return;
     }
-    char* r = path;
-    char* w = path;
+    char *r = path;
+    char *w = path;
     while (*r) {
         *w++ = *r;
         if (*r == '/') {
@@ -52,14 +53,15 @@ void normalize_path(char* path) {
     }
 }
 
-void collapse_path(char* path) {
+void collapse_path(char *path)
+{
     if (!path || !*path) {
         return;
     }
 
     bool is_abs = (path[0] == '/');
-    char* r = path + (is_abs ? 1 : 0);
-    char* w = path + (is_abs ? 1 : 0);
+    char *r = path + (is_abs ? 1 : 0);
+    char *w = path + (is_abs ? 1 : 0);
 
     // Stack of component write-offsets
     size_t stack[PATH_MAX / 2];
@@ -73,7 +75,7 @@ void collapse_path(char* path) {
         if (!*r) {
             break;
         }
-        const char* start = r;
+        const char *start = r;
         while (*r && *r != '/') {
             r++;
         }
@@ -85,8 +87,8 @@ void collapse_path(char* path) {
         if (len == 2 && start[0] == '.' && start[1] == '.') {
             if (depth > 0) {
                 size_t prev = stack[depth - 1];
-                if (!is_abs && (size_t)(w - path - prev) == 2 &&
-                    path[prev] == '.' && path[prev + 1] == '.') {
+                if (!is_abs && (size_t)(w - path - prev) == 2 && path[prev] == '.' &&
+                    path[prev + 1] == '.') {
                     depth++;
                     if (w > path && *(w - 1) != '/') {
                         *w++ = '/';
@@ -128,7 +130,8 @@ void collapse_path(char* path) {
     *w = '\0';
 }
 
-void join_path(char* out, size_t out_size, const char* dir, const char* rel) {
+void join_path(char *out, size_t out_size, const char *dir, const char *rel)
+{
     if (!dir || strlen(dir) == 0) {
         snprintf(out, out_size, "%s", rel ? rel : "");
     } else if (!rel || strlen(rel) == 0) {
@@ -144,7 +147,8 @@ void join_path(char* out, size_t out_size, const char* dir, const char* rel) {
     normalize_path(out);
 }
 
-bool is_path_prefix(const char* path, const char* prefix) {
+bool is_path_prefix(const char *path, const char *prefix)
+{
     if (!path || !prefix) {
         return false;
     }
@@ -166,7 +170,8 @@ bool is_path_prefix(const char* path, const char* prefix) {
     return false;
 }
 
-void expand_tilde_path(const char* path, char* out, size_t out_size) {
+void expand_tilde_path(const char *path, char *out, size_t out_size)
+{
     if (!path || !out || out_size == 0) {
         return;
     }
@@ -184,7 +189,8 @@ void expand_tilde_path(const char* path, char* out, size_t out_size) {
     expand_env_vars(temp, out, out_size);
 }
 
-void get_dotfiles_dir(char* buf, size_t buf_size) {
+void get_dotfiles_dir(char *buf, size_t buf_size)
+{
     char cwd[PATH_MAX];
     if (getcwd(cwd, sizeof(cwd))) {
         snprintf(buf, buf_size, "%s", cwd);
@@ -193,6 +199,7 @@ void get_dotfiles_dir(char* buf, size_t buf_size) {
     }
 }
 
-bool get_target_dir(char* buf, size_t buf_size) {
+bool get_target_dir(char *buf, size_t buf_size)
+{
     return get_user_home_dir(buf, buf_size);
 }

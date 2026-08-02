@@ -38,7 +38,8 @@ static volatile sig_atomic_t g_signal_temp_count = 0;
 
 static StringArray g_temp_paths = {NULL, 0, 0};
 
-void register_temp_path(const char* path) {
+void register_temp_path(const char *path)
+{
     if (!path || *path == '\0') {
         return;
     }
@@ -65,7 +66,8 @@ void register_temp_path(const char* path) {
     }
 }
 
-void unregister_temp_path(const char* path) {
+void unregister_temp_path(const char *path)
+{
     if (!path || *path == '\0') {
         return;
     }
@@ -87,9 +89,10 @@ void unregister_temp_path(const char* path) {
     }
 }
 
-void cleanup_temp_paths(void) {
+void cleanup_temp_paths(void)
+{
     for (size_t i = 0; i < g_temp_paths.count; i++) {
-        const char* p = g_temp_paths.items[i];
+        const char *p = g_temp_paths.items[i];
         if (!p || *p == '\0') {
             continue;
         }
@@ -107,10 +110,11 @@ void cleanup_temp_paths(void) {
     str_array_free(&g_temp_paths);
 }
 
-void cleanup_temp_paths_signal_safe(void) {
+void cleanup_temp_paths_signal_safe(void)
+{
     // unlink the directory first
     for (int i = 0; i < MAX_SIGNAL_TEMP_PATHS; i++) {
-        const char* p = g_signal_temp_paths[i];
+        const char *p = g_signal_temp_paths[i];
         if (p && p[0] != '\0') {
             (void)unlink(p);
         }
@@ -118,24 +122,25 @@ void cleanup_temp_paths_signal_safe(void) {
 
     // and remove the directory
     for (int i = 0; i < MAX_SIGNAL_TEMP_PATHS; i++) {
-        const char* p = g_signal_temp_paths[i];
+        const char *p = g_signal_temp_paths[i];
         if (p && p[0] != '\0') {
             (void)rmdir(p);
         }
     }
 }
 
-static void handle_signal_interrupt(int sig) {
+static void handle_signal_interrupt(int sig)
+{
     g_interrupted = sig;
-    const char msg[] =
-        "\n[WARNING] Operation interrupted by signal (Ctrl+C). Cleaning up "
-        "temporary files...\n";
+    const char msg[] = "\n[WARNING] Operation interrupted by signal (Ctrl+C). Cleaning up "
+                       "temporary files...\n";
     (void)write(STDERR_FILENO, msg, sizeof(msg) - 1);
     cleanup_temp_paths_signal_safe();
     _exit(128 + sig);
 }
 
-void setup_signal_handlers(void) {
+void setup_signal_handlers(void)
+{
     struct sigaction sa;
     memset(&sa, 0, sizeof(sa));
     sa.sa_handler = handle_signal_interrupt;
