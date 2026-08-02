@@ -59,13 +59,10 @@ static void parse_shebang_interpreter(const char *first_line, StringArray *sheba
 
 static bool contains_word_token(const char *line, const char *word)
 {
-    if (!line || !word) {
+    if (!line || !word || *word == '\0' || *line == '\0') {
         return false;
     }
     size_t wlen = strlen(word);
-    if (wlen == 0) {
-        return false;
-    }
 
     const char *pos = line;
     while ((pos = strstr(pos, word)) != NULL) {

@@ -192,7 +192,7 @@ void get_default_stowignore(StringArray *ignore_patterns)
 
 bool is_path_ignored(const char *rel_path, const StringArray *raw_ignores)
 {
-    if (!rel_path || strlen(rel_path) == 0) {
+    if (!rel_path || *rel_path == '\0') {
         return false;
     }
 
@@ -213,21 +213,24 @@ bool is_path_ignored(const char *rel_path, const StringArray *raw_ignores)
 
     for (size_t i = 0; i < raw_ignores->count; i++) {
         const char *pat = raw_ignores->items[i];
-        if (!pat || strlen(pat) == 0) {
+        if (!pat || *pat == '\0') {
             continue;
         }
 
+        size_t plen = strlen(pat);
         if (strchr(pat, '/') != NULL) {
             if (fnmatch(pat, rel_path, FNM_PATHNAME) == 0) {
                 return true;
             }
-            size_t plen = strlen(pat);
             if (pat[plen - 1] == '/') {
-                char dir_pat[PATH_MAX];
-                snprintf(dir_pat, sizeof(dir_pat), "%.*s", (int)(plen - 1), pat);
-                if (fnmatch(dir_pat, rel_path, FNM_PATHNAME) == 0 ||
-                    strncmp(rel_path, pat, plen) == 0 || strstr(rel_path, pat) != NULL) {
-                    return true;
+                if (plen < PATH_MAX) {
+                    char dir_pat[PATH_MAX];
+                    memcpy(dir_pat, pat, plen - 1);
+                    dir_pat[plen - 1] = '\0';
+                    if (fnmatch(dir_pat, rel_path, FNM_PATHNAME) == 0 ||
+                        strncmp(rel_path, pat, plen) == 0 || strstr(rel_path, pat) != NULL) {
+                        return true;
+                    }
                 }
             }
         } else {

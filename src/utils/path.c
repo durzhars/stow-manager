@@ -132,16 +132,36 @@ void collapse_path(char *path)
 
 void join_path(char *out, size_t out_size, const char *dir, const char *rel)
 {
-    if (!dir || strlen(dir) == 0) {
-        snprintf(out, out_size, "%s", rel ? rel : "");
-    } else if (!rel || strlen(rel) == 0) {
-        snprintf(out, out_size, "%s", dir);
+    if (!out || out_size == 0) {
+        return;
+    }
+    if (!dir || *dir == '\0') {
+        size_t rlen = rel ? strlen(rel) : 0;
+        size_t copy_len = rlen < out_size - 1 ? rlen : out_size - 1;
+        if (rel && copy_len > 0) {
+            memcpy(out, rel, copy_len);
+        }
+        out[copy_len] = '\0';
+    } else if (!rel || *rel == '\0') {
+        size_t dlen = strlen(dir);
+        size_t copy_len = dlen < out_size - 1 ? dlen : out_size - 1;
+        memcpy(out, dir, copy_len);
+        out[copy_len] = '\0';
     } else {
         size_t dlen = strlen(dir);
-        if (dir[dlen - 1] == '/') {
-            snprintf(out, out_size, "%s%s", dir, rel);
+        size_t rlen = strlen(rel);
+        bool has_slash = (dir[dlen - 1] == '/');
+        size_t needed = dlen + (has_slash ? 0 : 1) + rlen;
+        if (needed < out_size) {
+            memcpy(out, dir, dlen);
+            if (!has_slash) {
+                out[dlen] = '/';
+                memcpy(out + dlen + 1, rel, rlen + 1);
+            } else {
+                memcpy(out + dlen, rel, rlen + 1);
+            }
         } else {
-            snprintf(out, out_size, "%s/%s", dir, rel);
+            snprintf(out, out_size, has_slash ? "%s%s" : "%s/%s", dir, rel);
         }
     }
     normalize_path(out);
@@ -152,20 +172,25 @@ bool is_path_prefix(const char *path, const char *prefix)
     if (!path || !prefix) {
         return false;
     }
-    char norm_path[PATH_MAX * 2];
-    char norm_prefix[PATH_MAX * 2];
-    snprintf(norm_path, sizeof(norm_path), "%s", path);
-    snprintf(norm_prefix, sizeof(norm_prefix), "%s", prefix);
+    char norm_path[PATH_MAX];
+    char norm_prefix[PATH_MAX];
+    size_t plen = strlen(path);
+    size_t prlen = strlen(prefix);
+    if (plen >= sizeof(norm_path) || prlen >= sizeof(norm_prefix)) {
+        return false;
+    }
+    memcpy(norm_path, path, plen + 1);
+    memcpy(norm_prefix, prefix, prlen + 1);
     normalize_path(norm_path);
     normalize_path(norm_prefix);
 
-    size_t plen = strlen(norm_prefix);
-    if (plen == 1 && norm_prefix[0] == '/') {
+    size_t norm_prlen = strlen(norm_prefix);
+    if (norm_prlen == 1 && norm_prefix[0] == '/') {
         return norm_path[0] == '/';
     }
 
-    if (strncmp(norm_path, norm_prefix, plen) == 0) {
-        return norm_path[plen] == '/' || norm_path[plen] == '\0';
+    if (strncmp(norm_path, norm_prefix, norm_prlen) == 0) {
+        return norm_path[norm_prlen] == '/' || norm_path[norm_prlen] == '\0';
     }
     return false;
 }
@@ -175,16 +200,22 @@ void expand_tilde_path(const char *path, char *out, size_t out_size)
     if (!path || !out || out_size == 0) {
         return;
     }
-    char temp[PATH_MAX * 2];
+    char temp[PATH_MAX];
     if (path[0] == '~' && (path[1] == '/' || path[1] == '\0')) {
         char home[PATH_MAX];
         if (get_user_home_dir(home, sizeof(home))) {
             snprintf(temp, sizeof(temp), "%s%s", home, path + 1);
         } else {
-            snprintf(temp, sizeof(temp), "%s", path);
+            size_t plen = strlen(path);
+            size_t copy_len = plen < sizeof(temp) - 1 ? plen : sizeof(temp) - 1;
+            memcpy(temp, path, copy_len);
+            temp[copy_len] = '\0';
         }
     } else {
-        snprintf(temp, sizeof(temp), "%s", path);
+        size_t plen = strlen(path);
+        size_t copy_len = plen < sizeof(temp) - 1 ? plen : sizeof(temp) - 1;
+        memcpy(temp, path, copy_len);
+        temp[copy_len] = '\0';
     }
     expand_env_vars(temp, out, out_size);
 }

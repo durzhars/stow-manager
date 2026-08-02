@@ -362,13 +362,18 @@ static void native_unstow_cb(const char *file_path, const char *rel_path, void *
                 ctx->unlinked_count++;
 
                 char parent[PATH_MAX * 2];
-                snprintf(parent, sizeof(parent), "%s", target_path);
+                size_t target_len = strlen(ctx->target_dir);
+                size_t path_len = strlen(target_path);
+                if (path_len < sizeof(parent)) {
+                    memcpy(parent, target_path, path_len + 1);
+                } else {
+                    snprintf(parent, sizeof(parent), "%s", target_path);
+                }
                 char *last_slash = strrchr(parent, '/');
                 if (last_slash) {
                     *last_slash = '\0';
                 }
-                while (strlen(parent) > strlen(ctx->target_dir) &&
-                       is_path_prefix(parent, ctx->target_dir)) {
+                while (strlen(parent) > target_len && is_path_prefix(parent, ctx->target_dir)) {
                     if (rmdir(parent) != 0) {
                         break;
                     }

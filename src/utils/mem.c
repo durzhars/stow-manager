@@ -84,7 +84,7 @@ void str_array_init(StringArray *arr)
 
 void str_array_append(StringArray *arr, const char *str)
 {
-    if (!str || strlen(str) == 0) {
+    if (!str || *str == '\0') {
         return;
     }
     if (arr->count >= arr->capacity) {

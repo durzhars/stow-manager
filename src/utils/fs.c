@@ -102,52 +102,65 @@ bool is_symlink_pointing_to(const char *symlink_path,
         return false;
     }
 
-    char raw_link[PATH_MAX * 2];
+    char raw_link[PATH_MAX];
     ssize_t len = readlink(symlink_path, raw_link, sizeof(raw_link) - 1);
     if (len == -1) {
         return false;
     }
     raw_link[len] = '\0';
 
-    char one_level_target[PATH_MAX * 2];
+    char one_level_target[PATH_MAX];
     if (raw_link[0] == '/') {
-        snprintf(one_level_target, sizeof(one_level_target), "%s", raw_link);
+        memcpy(one_level_target, raw_link, (size_t)len + 1);
     } else {
         const char *last_slash = strrchr(symlink_path, '/');
         if (last_slash) {
             size_t parent_len = (size_t)(last_slash - symlink_path);
-            snprintf(one_level_target,
-                     sizeof(one_level_target),
-                     "%.*s/%s",
-                     (int)parent_len,
-                     symlink_path,
-                     raw_link);
+            if (parent_len + 1 + (size_t)len >= sizeof(one_level_target)) {
+                return false;
+            }
+            memcpy(one_level_target, symlink_path, parent_len);
+            one_level_target[parent_len] = '/';
+            memcpy(one_level_target + parent_len + 1, raw_link, (size_t)len + 1);
         } else {
-            snprintf(one_level_target, sizeof(one_level_target), "./%s", raw_link);
+            if ((size_t)len + 3 >= sizeof(one_level_target)) {
+                return false;
+            }
+            one_level_target[0] = '.';
+            one_level_target[1] = '/';
+            memcpy(one_level_target + 2, raw_link, (size_t)len + 1);
         }
     }
     collapse_path(one_level_target);
     normalize_path(one_level_target);
 
-    char norm_pkg_file[PATH_MAX * 2];
-    snprintf(norm_pkg_file, sizeof(norm_pkg_file), "%s", pkg_file_path);
-    normalize_path(norm_pkg_file);
-
-    if (strcmp(one_level_target, norm_pkg_file) == 0) {
-        return true;
-    }
-
-    if (real_pkg_file_path && *real_pkg_file_path != '\0') {
-        char norm_real_pkg_file[PATH_MAX * 2];
-        snprintf(norm_real_pkg_file, sizeof(norm_real_pkg_file), "%s", real_pkg_file_path);
-        normalize_path(norm_real_pkg_file);
-        if (strcmp(one_level_target, norm_real_pkg_file) == 0) {
+    char norm_pkg_file[PATH_MAX];
+    size_t pkg_len = strlen(pkg_file_path);
+    if (pkg_len < sizeof(norm_pkg_file)) {
+        memcpy(norm_pkg_file, pkg_file_path, pkg_len + 1);
+        normalize_path(norm_pkg_file);
+        if (strcmp(one_level_target, norm_pkg_file) == 0) {
             return true;
         }
     }
 
-    char resolved_target[PATH_MAX * 2];
-    char resolved_pkg_file[PATH_MAX * 2];
+    if (real_pkg_file_path && *real_pkg_file_path != '\0') {
+        if (strcmp(one_level_target, real_pkg_file_path) == 0) {
+            return true;
+        }
+        char norm_real_pkg_file[PATH_MAX];
+        size_t real_len = strlen(real_pkg_file_path);
+        if (real_len < sizeof(norm_real_pkg_file)) {
+            memcpy(norm_real_pkg_file, real_pkg_file_path, real_len + 1);
+            normalize_path(norm_real_pkg_file);
+            if (strcmp(one_level_target, norm_real_pkg_file) == 0) {
+                return true;
+            }
+        }
+    }
+
+    char resolved_target[PATH_MAX];
+    char resolved_pkg_file[PATH_MAX];
     if (realpath(symlink_path, resolved_target) != NULL &&
         realpath(pkg_file_path, resolved_pkg_file) != NULL) {
         if (strcmp(resolved_target, resolved_pkg_file) == 0) {
