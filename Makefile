@@ -11,6 +11,11 @@ CC ?= gcc
 CFLAGS ?= -Wall -Wextra -pedantic -Wconversion -Wsign-conversion -Wno-overlength-strings -std=c17 -O2 -Iinclude -DDATADIR=\"$(DATADIR)\" -DSYSCONFDIR=\"$(SYSCONFDIR)\"
 LDFLAGS ?=
 
+# Reusable Clang optimization & diagnostic profiles
+CLANG_OPT_FLAGS = -O3 -fomit-frame-pointer -flto=thin -fsave-optimization-record -Rpass=inline -Rpass-missed=loop-vectorize
+CLANG_OPT_LDFLAGS = -flto=thin -fuse-ld=lld
+CLANG_SAN_FLAGS = -fsanitize=address,undefined -fno-omit-frame-pointer -g
+
 SRC_DIR = src
 INC_DIR = include
 BUILD_DIR = build
@@ -46,9 +51,24 @@ TEST_OBJS = $(patsubst $(TEST_UNIT_DIR)/%.c,$(BUILD_DIR)/%.o,$(TEST_SRCS)) \
             $(filter-out $(BUILD_DIR)/main.o,$(OBJS))
 TEST_TARGET = $(BIN_DIR)/test_runner
 
-.PHONY: all clean static install test test-feature uninstall tidy format format-check build-clang-opt build-sanitize
+.PHONY: all clean static install test test-feature uninstall tidy format format-check build-clang-opt build-sanitize build-pgo help
 
 all: $(TARGET)
+
+help:
+	@echo "Dotfiles Stow Manager - Build Targets:"
+	@echo ""
+	@echo "  make                      Build release binary using default compiler ($(CC))"
+	@echo "  make test                 Run unit test suite"
+	@echo "  make test-feature         Run end-to-end integration feature tests"
+	@echo "  make clean                Clean build and bin output directories"
+	@echo ""
+	@echo "  Clang Optimization & Diagnostics Targets:"
+	@echo "  make build-clang-opt      Build with Clang ThinLTO, -O3, and optimization remarks"
+	@echo "  make build-pgo            Build with Clang 2-stage Profile-Guided Optimization"
+	@echo "  make build-sanitize       Build with Clang AddressSanitizer & UBSanitizer"
+	@echo "  make tidy                 Run clang-tidy static analysis"
+	@echo "  make format               Format source files with clang-format"
 
 $(TARGET): $(OBJS) | $(BIN_DIR)
 	$(CC) $(CFLAGS) $(OBJS) -o $(TARGET) $(LDFLAGS)
@@ -62,17 +82,31 @@ format:
 format-check:
 	clang-format --dry-run --Werror $(SRCS) $(TEST_SRCS) include/*.h tests/unit/*.h
 
-# Compile using Clang with Thin LTO and optimization remarks
+# Compile using Clang with Thin LTO, aggressive optimization (-O3) and remarks
 build-clang-opt: CC = clang
-build-clang-opt: CFLAGS += -flto=thin -fsave-optimization-record -Rpass=inline -Rpass-missed=loop-vectorize
-build-clang-opt: LDFLAGS += -flto=thin -fuse-ld=lld
+build-clang-opt: CFLAGS += $(CLANG_OPT_FLAGS)
+build-clang-opt: LDFLAGS += $(CLANG_OPT_LDFLAGS)
 build-clang-opt: clean $(TARGET)
 
 # Compile using Clang with sanitizers enabled (ASan + UBSan)
 build-sanitize: CC = clang
-build-sanitize: CFLAGS += -fsanitize=address,undefined -fno-omit-frame-pointer -g
-build-sanitize: LDFLAGS += -fsanitize=address,undefined
+build-sanitize: CFLAGS += $(CLANG_SAN_FLAGS)
+build-sanitize: LDFLAGS += $(CLANG_SAN_FLAGS)
 build-sanitize: clean $(TARGET)
+
+# Two-stage Profile-Guided Optimization (PGO) using Clang & ThinLTO
+build-pgo: CC = clang
+build-pgo: clean
+	@echo "=== Stage 1: Building instrumented binary ==="
+	@mkdir -p bin build
+	$(CC) $(CFLAGS) $(CLANG_OPT_FLAGS) -fprofile-instr-generate $(SRCS) -o $(TARGET) $(LDFLAGS) $(CLANG_OPT_LDFLAGS)
+	@echo "=== Stage 2: Collecting execution workload profile ==="
+	-@bash $(TEST_FEATURE_DIR)/run_feature_tests.sh > /dev/null 2>&1
+	@llvm-profdata merge -output=stow_app.profdata default.profraw 2>/dev/null || true
+	@echo "=== Stage 3: Compiling PGO production binary with profile feedback ==="
+	$(CC) $(CFLAGS) $(CLANG_OPT_FLAGS) -fprofile-instr-use=stow_app.profdata $(SRCS) -o $(TARGET) $(LDFLAGS) $(CLANG_OPT_LDFLAGS)
+	@rm -f default.profraw stow_app.profdata
+	@echo "=== PGO build complete ==="
 
 static: CFLAGS += -static
 static: $(TARGET)
