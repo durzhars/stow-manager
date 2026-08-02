@@ -25,8 +25,8 @@
 
 void test_registry_parsing(void)
 {
-    char tmp_dir[] = "/tmp/stow_reg_XXXXXX";
-    ASSERT(mkdtemp(tmp_dir) != NULL, "Should create temporary test directory");
+    char tmp_dir[PATH_MAX];
+    ASSERT(create_test_tmp_dir(tmp_dir, sizeof(tmp_dir), "reg") != NULL, "Should create temporary test directory");
 
     char reg_path[PATH_MAX * 4];
     snprintf(reg_path, sizeof(reg_path), "%s/stow.registry", tmp_dir);
@@ -49,7 +49,5 @@ void test_registry_parsing(void)
     registry_get_distro_pkg(tmp_dir, "tool_a", "ubuntu", distro_pkg, sizeof(distro_pkg));
     ASSERT_STR_EQ(distro_pkg, "pkg_a_ubuntu");
 
-    char cleanup_cmd[PATH_MAX * 4];
-    snprintf(cleanup_cmd, sizeof(cleanup_cmd), "rm -rf \"%s\"", tmp_dir);
-    (void)system(cleanup_cmd);
+    cleanup_test_dir(tmp_dir);
 }

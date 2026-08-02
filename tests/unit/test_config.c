@@ -23,12 +23,12 @@
 #include "../include/config.h"
 #include "test_framework.h"
 
-void test_config_system(void)
-{
-    char tmp_dir[] = "/tmp/stow_cfg_test_XXXXXX";
-    ASSERT(mkdtemp(tmp_dir) != NULL, "Should create temporary test directory");
+void test_config_system(void) {
+    char tmp_dir[PATH_MAX];
+    ASSERT(create_test_tmp_dir(tmp_dir, sizeof(tmp_dir), "cfg_test") != NULL,
+           "Should create temporary test directory");
 
-    const char *old_xdg = getenv("XDG_CONFIG_HOME");
+    const char* old_xdg = getenv("XDG_CONFIG_HOME");
     char old_xdg_buf[PATH_MAX] = {0};
     if (old_xdg) {
         snprintf(old_xdg_buf, sizeof(old_xdg_buf), "%s", old_xdg);
@@ -54,17 +54,15 @@ void test_config_system(void)
         unsetenv("XDG_CONFIG_HOME");
     }
 
-    char cleanup_cmd[PATH_MAX * 4];
-    snprintf(cleanup_cmd, sizeof(cleanup_cmd), "rm -rf \"%s\"", tmp_dir);
-    (void)system(cleanup_cmd);
+    cleanup_test_dir(tmp_dir);
 }
 
-void test_config_add_remove_dotfiles_dir(void)
-{
-    char tmp_dir[] = "/tmp/stow_cfg_dirs_XXXXXX";
-    ASSERT(mkdtemp(tmp_dir) != NULL, "Should create temporary directory for config dirs test");
+void test_config_add_remove_dotfiles_dir(void) {
+    char tmp_dir[PATH_MAX];
+    ASSERT(create_test_tmp_dir(tmp_dir, sizeof(tmp_dir), "cfg_dirs") != NULL,
+           "Should create temporary directory for config dirs test");
 
-    const char *old_xdg = getenv("XDG_CONFIG_HOME");
+    const char* old_xdg = getenv("XDG_CONFIG_HOME");
     char old_xdg_buf[PATH_MAX] = {0};
     if (old_xdg) {
         snprintf(old_xdg_buf, sizeof(old_xdg_buf), "%s", old_xdg);
@@ -84,13 +82,15 @@ void test_config_add_remove_dotfiles_dir(void)
     Config cfg;
     config_init(&cfg);
     ASSERT(config_load(&cfg), "Config should load");
-    ASSERT(str_array_contains(&cfg.dotfiles_dirs, dir_a), "Config should contain dir_a");
+    ASSERT(str_array_contains(&cfg.dotfiles_dirs, dir_a),
+           "Config should contain dir_a");
     config_free(&cfg);
 
     config_add_dotfiles_dir(dir_b);
     config_init(&cfg);
     config_load(&cfg);
-    ASSERT(str_array_contains(&cfg.dotfiles_dirs, dir_b), "Config should contain dir_b");
+    ASSERT(str_array_contains(&cfg.dotfiles_dirs, dir_b),
+           "Config should contain dir_b");
 
     // Duplicate addition handling
     config_add_dotfiles_dir(dir_a);
@@ -111,8 +111,10 @@ void test_config_add_remove_dotfiles_dir(void)
     config_remove_dotfiles_dir(dir_a);
     config_init(&cfg);
     config_load(&cfg);
-    ASSERT(!str_array_contains(&cfg.dotfiles_dirs, dir_a), "Config should no longer contain dir_a");
-    ASSERT(str_array_contains(&cfg.dotfiles_dirs, dir_b), "Config should still contain dir_b");
+    ASSERT(!str_array_contains(&cfg.dotfiles_dirs, dir_a),
+           "Config should no longer contain dir_a");
+    ASSERT(str_array_contains(&cfg.dotfiles_dirs, dir_b),
+           "Config should still contain dir_b");
     config_free(&cfg);
 
     // Remove non-registered path
@@ -130,30 +132,28 @@ void test_config_add_remove_dotfiles_dir(void)
         unsetenv("XDG_CONFIG_HOME");
     }
 
-    char rm_cmd[PATH_MAX * 2];
-    snprintf(rm_cmd, sizeof(rm_cmd), "rm -rf \"%s\"", tmp_dir);
-    (void)system(rm_cmd);
+    cleanup_test_dir(tmp_dir);
 }
 
-void test_get_active_dotfiles_dir_cascade(void)
-{
-    char tmp_dir[] = "/tmp/stow_cfg_casc_XXXXXX";
-    ASSERT(mkdtemp(tmp_dir) != NULL, "Should create temporary directory for cascade test");
+void test_get_active_dotfiles_dir_cascade(void) {
+    char tmp_dir[PATH_MAX];
+    ASSERT(create_test_tmp_dir(tmp_dir, sizeof(tmp_dir), "cfg_casc") != NULL,
+           "Should create temporary directory for cascade test");
 
     // Save environment state
-    const char *old_stow_dir = getenv("STOW_DOTFILES_DIR");
+    const char* old_stow_dir = getenv("STOW_DOTFILES_DIR");
     char old_stow_buf[PATH_MAX] = {0};
     if (old_stow_dir) {
         snprintf(old_stow_buf, sizeof(old_stow_buf), "%s", old_stow_dir);
     }
 
-    const char *old_dot_dir = getenv("DOTFILES_DIR");
+    const char* old_dot_dir = getenv("DOTFILES_DIR");
     char old_dot_buf[PATH_MAX] = {0};
     if (old_dot_dir) {
         snprintf(old_dot_buf, sizeof(old_dot_buf), "%s", old_dot_dir);
     }
 
-    const char *old_xdg = getenv("XDG_CONFIG_HOME");
+    const char* old_xdg = getenv("XDG_CONFIG_HOME");
     char old_xdg_buf[PATH_MAX] = {0};
     if (old_xdg) {
         snprintf(old_xdg_buf, sizeof(old_xdg_buf), "%s", old_xdg);
@@ -219,7 +219,69 @@ void test_get_active_dotfiles_dir_cascade(void)
         unsetenv("XDG_CONFIG_HOME");
     }
 
-    char rm_cmd[PATH_MAX * 2];
-    snprintf(rm_cmd, sizeof(rm_cmd), "rm -rf \"%s\"", tmp_dir);
-    (void)system(rm_cmd);
+    cleanup_test_dir(tmp_dir);
+}
+
+void test_config_sanity_checks(void) {
+    char tmp_dir[PATH_MAX];
+    ASSERT(create_test_tmp_dir(tmp_dir, sizeof(tmp_dir), "cfg_san") != NULL,
+           "Should create temporary test directory");
+
+    const char* old_xdg = getenv("XDG_CONFIG_HOME");
+    setenv("XDG_CONFIG_HOME", tmp_dir, 1);
+
+    // Attempting to set an invalid/nonexistent directory should fail sanity
+    // check
+    config_set_target_dir("/nonexistent/invalid/target/path/xyz");
+
+    Config cfg;
+    config_init(&cfg);
+    config_load(&cfg);
+    ASSERT(cfg.target_dir[0] == '\0',
+           "Target dir should not be set when sanity check fails");
+    config_free(&cfg);
+
+    if (old_xdg)
+        setenv("XDG_CONFIG_HOME", old_xdg, 1);
+    else
+        unsetenv("XDG_CONFIG_HOME");
+
+    cleanup_test_dir(tmp_dir);
+}
+
+void test_config_save_disclaimer(void) {
+    char tmp_dir[PATH_MAX];
+    ASSERT(create_test_tmp_dir(tmp_dir, sizeof(tmp_dir), "cfg_hdr") != NULL,
+           "Should create temporary test directory");
+
+    const char* old_xdg = getenv("XDG_CONFIG_HOME");
+    setenv("XDG_CONFIG_HOME", tmp_dir, 1);
+
+    Config cfg;
+    config_init(&cfg);
+    str_array_append(&cfg.dotfiles_dirs, tmp_dir);
+    config_save(&cfg);
+
+    char cfg_path[PATH_MAX];
+    snprintf(cfg_path, sizeof(cfg_path), "%s/stow-manager/config", tmp_dir);
+
+    FILE* fp = fopen(cfg_path, "r");
+    ASSERT(fp != NULL, "Saved config file should exist");
+
+    char buffer[1024] = {0};
+    fread(buffer, 1, sizeof(buffer) - 1, fp);
+    fclose(fp);
+
+    ASSERT(
+        strstr(buffer, "Stow Manager Configuration (Auto-Generated)") != NULL,
+        "Config file should contain auto-generated disclaimer header");
+
+    config_free(&cfg);
+
+    if (old_xdg)
+        setenv("XDG_CONFIG_HOME", old_xdg, 1);
+    else
+        unsetenv("XDG_CONFIG_HOME");
+
+    cleanup_test_dir(tmp_dir);
 }

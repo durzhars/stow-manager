@@ -19,10 +19,22 @@
 #ifndef TEST_FRAMEWORK_H
 #define TEST_FRAMEWORK_H
 
+#ifndef _GNU_SOURCE
+#define _GNU_SOURCE
+#endif
+#ifndef _DEFAULT_SOURCE
+#define _DEFAULT_SOURCE
+#endif
+#ifndef _POSIX_C_SOURCE
+#define _POSIX_C_SOURCE 200809L
+#endif
+
+#include <limits.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 
 #define TEST_GREEN "\033[0;32m"
 #define TEST_RED "\033[0;31m"
@@ -30,6 +42,38 @@
 
 extern int g_tests_run;
 extern int g_tests_failed;
+
+#include "../include/utils.h"
+
+static inline char *create_test_tmp_dir(char *buf, size_t buf_size, const char *prefix)
+{
+    const char *tmpenv = getenv("TMPDIR");
+    if (!tmpenv || *tmpenv == '\0') {
+        tmpenv = getenv("TMP");
+    }
+    if (!tmpenv || *tmpenv == '\0') {
+        tmpenv = getenv("TEMP");
+    }
+#ifdef P_tmpdir
+    if (!tmpenv || *tmpenv == '\0') {
+        tmpenv = P_tmpdir;
+    }
+#endif
+    if (!tmpenv || *tmpenv == '\0') {
+        tmpenv = "/tmp";
+    }
+    snprintf(buf, buf_size, "%s/stow_%s_XXXXXX", tmpenv, prefix);
+    return mkdtemp(buf);
+}
+
+static inline void cleanup_test_dir(const char *dir_path)
+{
+    if (!dir_path || *dir_path == '\0') {
+        return;
+    }
+    cleanup_temp_dir_contents(dir_path);
+    rmdir(dir_path);
+}
 
 #define ASSERT(expr, msg)                               \
     do {                                                \

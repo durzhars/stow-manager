@@ -25,8 +25,8 @@
 
 void test_manifest_load_save(void)
 {
-    char tmp_dir[] = "/tmp/stow_test_XXXXXX";
-    ASSERT(mkdtemp(tmp_dir) != NULL, "Should create temporary test directory");
+    char tmp_dir[PATH_MAX];
+    ASSERT(create_test_tmp_dir(tmp_dir, sizeof(tmp_dir), "man_save") != NULL, "Should create temporary test directory");
 
     char pkg_dir[PATH_MAX * 4];
     snprintf(pkg_dir, sizeof(pkg_dir), "%s/testpkg", tmp_dir);
@@ -57,15 +57,13 @@ void test_manifest_load_save(void)
 
     manifest_free(&loaded);
 
-    char cleanup_cmd[PATH_MAX * 4];
-    snprintf(cleanup_cmd, sizeof(cleanup_cmd), "rm -rf \"%s\"", tmp_dir);
-    (void)system(cleanup_cmd);
+    cleanup_test_dir(tmp_dir);
 }
 
 void test_manifest_add_and_remove_dep(void)
 {
-    char tmp_dir[] = "/tmp/stow_man_dep_XXXXXX";
-    ASSERT(mkdtemp(tmp_dir) != NULL, "Should create temporary directory for manifest dep test");
+    char tmp_dir[PATH_MAX];
+    ASSERT(create_test_tmp_dir(tmp_dir, sizeof(tmp_dir), "man_dep") != NULL, "Should create temporary directory for manifest dep test");
 
     char pkg_dir[PATH_MAX];
     snprintf(pkg_dir, sizeof(pkg_dir), "%s/mypkg", tmp_dir);
@@ -107,15 +105,13 @@ void test_manifest_add_and_remove_dep(void)
 
     manifest_free(&loaded);
 
-    char rm_cmd[PATH_MAX * 2];
-    snprintf(rm_cmd, sizeof(rm_cmd), "rm -rf \"%s\"", tmp_dir);
-    (void)system(rm_cmd);
+    cleanup_test_dir(tmp_dir);
 }
 
 void test_manifest_malformed_file(void)
 {
-    char tmp_dir[] = "/tmp/stow_man_bad_XXXXXX";
-    ASSERT(mkdtemp(tmp_dir) != NULL,
+    char tmp_dir[PATH_MAX];
+    ASSERT(create_test_tmp_dir(tmp_dir, sizeof(tmp_dir), "man_bad") != NULL,
            "Should create temporary directory for malformed manifest test");
 
     char pkg_dir[PATH_MAX];
@@ -143,15 +139,13 @@ void test_manifest_malformed_file(void)
 
     manifest_free(&loaded);
 
-    char rm_cmd[PATH_MAX * 2];
-    snprintf(rm_cmd, sizeof(rm_cmd), "rm -rf \"%s\"", tmp_dir);
-    (void)system(rm_cmd);
+    cleanup_test_dir(tmp_dir);
 }
 
 void test_manifest_edit_dep(void)
 {
-    char tmp_dir[] = "/tmp/stow_man_edt_XXXXXX";
-    ASSERT(mkdtemp(tmp_dir) != NULL, "Should create temporary directory for manifest edit test");
+    char tmp_dir[PATH_MAX];
+    ASSERT(create_test_tmp_dir(tmp_dir, sizeof(tmp_dir), "man_edt") != NULL, "Should create temporary directory for manifest edit test");
 
     char pkg_dir[PATH_MAX];
     snprintf(pkg_dir, sizeof(pkg_dir), "%s/editpkg", tmp_dir);
@@ -173,17 +167,15 @@ void test_manifest_edit_dep(void)
     ASSERT(!str_array_contains(&loaded.optional, "bash"), "Should no longer be optional");
     manifest_free(&loaded);
 
-    char rm_cmd[PATH_MAX * 2];
-    snprintf(rm_cmd, sizeof(rm_cmd), "rm -rf \"%s\"", tmp_dir);
-    (void)system(rm_cmd);
+    cleanup_test_dir(tmp_dir);
 }
 
 void test_package_remove(void)
 {
-    char tmp_dotfiles[] = "/tmp/stow_pkg_rm_dot_XXXXXX";
-    char tmp_target[] = "/tmp/stow_pkg_rm_tgt_XXXXXX";
-    ASSERT(mkdtemp(tmp_dotfiles) != NULL, "Should create temporary dotfiles directory");
-    ASSERT(mkdtemp(tmp_target) != NULL, "Should create temporary target directory");
+    char tmp_dotfiles[PATH_MAX];
+    char tmp_target[PATH_MAX];
+    ASSERT(create_test_tmp_dir(tmp_dotfiles, sizeof(tmp_dotfiles), "pkg_rm_dot") != NULL, "Should create temporary dotfiles directory");
+    ASSERT(create_test_tmp_dir(tmp_target, sizeof(tmp_target), "pkg_rm_tgt") != NULL, "Should create temporary target directory");
 
     char pkg_dir[PATH_MAX];
     snprintf(pkg_dir, sizeof(pkg_dir), "%s/rmpkg", tmp_dotfiles);
@@ -202,7 +194,28 @@ void test_package_remove(void)
     package_remove(tmp_dotfiles, tmp_target, "rmpkg", false);
     ASSERT(!file_exists(pkg_dir), "rmpkg directory should be deleted after package_remove");
 
-    char rm_cmd[PATH_MAX * 4];
-    snprintf(rm_cmd, sizeof(rm_cmd), "rm -rf \"%s\" \"%s\"", tmp_dotfiles, tmp_target);
-    (void)system(rm_cmd);
+    cleanup_test_dir(tmp_dotfiles);
+    cleanup_test_dir(tmp_target);
+}
+
+void test_manifest_set_target(void)
+{
+    char tmp_dir[PATH_MAX];
+    ASSERT(create_test_tmp_dir(tmp_dir, sizeof(tmp_dir), "man_tgt") != NULL, "Should create temporary test directory");
+
+    char pkg_dir[PATH_MAX];
+    snprintf(pkg_dir, sizeof(pkg_dir), "%s/tgtpkg", tmp_dir);
+    ASSERT(mkdir(pkg_dir, 0755) == 0, "Should create tgtpkg directory");
+
+    manifest_set_target(tmp_dir, "tgtpkg", "/custom/target/path");
+
+    PackageManifest loaded;
+    manifest_init(&loaded, "tgtpkg");
+    ASSERT(manifest_load(&loaded, tmp_dir), "Should load manifest");
+    ASSERT(loaded.target_path != NULL, "Manifest target_path should not be NULL");
+    ASSERT_STR_EQ(loaded.target_path, "/custom/target/path");
+
+    manifest_free(&loaded);
+
+    cleanup_test_dir(tmp_dir);
 }

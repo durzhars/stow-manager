@@ -12,8 +12,8 @@ echo -e "${COLOR_BOLD}[Test 1] Stow, Restow, and Unstow Single & Multiple Packag
 setup_sandbox
 mkdir -p "$STOW_DOTFILES_DIR/pkg1/.config/app1"
 mkdir -p "$STOW_DOTFILES_DIR/pkg2/.config/app2"
-echo "app1 config" > "$STOW_DOTFILES_DIR/pkg1/.config/app1/app1.conf"
-echo "app2 config" > "$STOW_DOTFILES_DIR/pkg2/.config/app2/app2.conf"
+echo "app1 config" >"$STOW_DOTFILES_DIR/pkg1/.config/app1/app1.conf"
+echo "app2 config" >"$STOW_DOTFILES_DIR/pkg2/.config/app2/app2.conf"
 
 assert_success "$STOW_BIN stow pkg1 pkg2" "stow-manager stow pkg1 pkg2 succeeded"
 assert_symlink_exists "$HOME/.config/app1/app1.conf" "$STOW_DOTFILES_DIR/pkg1/.config/app1/app1.conf" "Symlink created for pkg1"
@@ -32,8 +32,8 @@ echo -e "\n${COLOR_BOLD}[Test 2] Stow All Packages ('all')${COLOR_RESET}"
 setup_sandbox
 mkdir -p "$STOW_DOTFILES_DIR/shell/.config/zsh"
 mkdir -p "$STOW_DOTFILES_DIR/editor/.config/nvim"
-echo "export FOO=bar" > "$STOW_DOTFILES_DIR/shell/.config/zsh/.zshrc"
-echo "set number" > "$STOW_DOTFILES_DIR/editor/.config/nvim/init.vim"
+echo "export FOO=bar" >"$STOW_DOTFILES_DIR/shell/.config/zsh/.zshrc"
+echo "set number" >"$STOW_DOTFILES_DIR/editor/.config/nvim/init.vim"
 
 assert_success "$STOW_BIN all" "stow-manager all succeeded"
 assert_symlink_exists "$HOME/.config/zsh/.zshrc" "$STOW_DOTFILES_DIR/shell/.config/zsh/.zshrc" "Symlink created for shell package"
@@ -43,8 +43,8 @@ assert_symlink_exists "$HOME/.config/nvim/init.vim" "$STOW_DOTFILES_DIR/editor/.
 echo -e "\n${COLOR_BOLD}[Test 3] Unfold Directory Symlinks ('fix-conflicts')${COLOR_RESET}"
 setup_sandbox
 mkdir -p "$STOW_DOTFILES_DIR/terminal/.config/kitty"
-echo "font_size 12" > "$STOW_DOTFILES_DIR/terminal/.config/kitty/kitty.conf"
-echo "theme dark" > "$STOW_DOTFILES_DIR/terminal/.config/kitty/theme.conf"
+echo "font_size 12" >"$STOW_DOTFILES_DIR/terminal/.config/kitty/kitty.conf"
+echo "theme dark" >"$STOW_DOTFILES_DIR/terminal/.config/kitty/theme.conf"
 
 mkdir -p "$HOME/.config"
 ln -s "$STOW_DOTFILES_DIR/terminal/.config/kitty" "$HOME/.config/kitty"
@@ -60,8 +60,8 @@ echo -e "\n${COLOR_BOLD}[Test 4] Mutual Exclusion Handling${COLOR_RESET}"
 setup_sandbox
 mkdir -p "$STOW_DOTFILES_DIR/pkgA"
 mkdir -p "$STOW_DOTFILES_DIR/pkgB"
-echo "pkgA config" > "$STOW_DOTFILES_DIR/pkgA/.pkgA_cfg"
-echo "pkgB config" > "$STOW_DOTFILES_DIR/pkgB/.pkgB_cfg"
+echo "pkgA config" >"$STOW_DOTFILES_DIR/pkgA/.pkgA_cfg"
+echo "pkgB config" >"$STOW_DOTFILES_DIR/pkgB/.pkgB_cfg"
 
 assert_success "$STOW_BIN deps:add pkgB pkgA --conflict" "Registered mutual exclusion conflict: pkgB conflicts with pkgA"
 
@@ -76,10 +76,10 @@ assert_symlink_exists "$HOME/.pkgB_cfg" "$STOW_DOTFILES_DIR/pkgB/.pkgB_cfg" "pkg
 echo -e "\n${COLOR_BOLD}[Test 5] Conflict Backup${COLOR_RESET}"
 setup_sandbox
 mkdir -p "$STOW_DOTFILES_DIR/terminal/.config/kitty"
-echo "font_size 12" > "$STOW_DOTFILES_DIR/terminal/.config/kitty/kitty.conf"
+echo "font_size 12" >"$STOW_DOTFILES_DIR/terminal/.config/kitty/kitty.conf"
 
 mkdir -p "$HOME/.config/kitty"
-echo "original local config file" > "$HOME/.config/kitty/kitty.conf"
+echo "original local config file" >"$HOME/.config/kitty/kitty.conf"
 
 assert_success "$STOW_BIN stow terminal" "stow-manager stow terminal resolved conflict"
 assert_symlink_exists "$HOME/.config/kitty/kitty.conf" "$STOW_DOTFILES_DIR/terminal/.config/kitty/kitty.conf" "Symlink placed over conflicting file"
@@ -98,8 +98,8 @@ echo -e "\n${COLOR_BOLD}[Test 6] Global Dry-Run Mode (-n / --dry-run)${COLOR_RES
 setup_sandbox
 mkdir -p "$STOW_DOTFILES_DIR/pkg1"
 mkdir -p "$STOW_DOTFILES_DIR/pkg2"
-echo "file 1" > "$STOW_DOTFILES_DIR/pkg1/.file1"
-echo "file 2" > "$STOW_DOTFILES_DIR/pkg2/.file2"
+echo "file 1" >"$STOW_DOTFILES_DIR/pkg1/.file1"
+echo "file 2" >"$STOW_DOTFILES_DIR/pkg2/.file2"
 
 assert_success "$STOW_BIN -n stow pkg1" "stow dry-run (-n) succeeded"
 assert_path_not_exists "$HOME/.file1" "No disk changes made during stow dry-run"
@@ -118,7 +118,7 @@ assert_success "$STOW_BIN --dry-run restow pkg1" "restow dry-run (--dry-run) suc
 assert_symlink_exists "$HOME/.file1" "$STOW_DOTFILES_DIR/pkg1/.file1" "Symlink remains active after restow dry-run"
 
 mkdir -p "$STOW_DOTFILES_DIR/terminal/.config/kitty"
-echo "font_size 14" > "$STOW_DOTFILES_DIR/terminal/.config/kitty/kitty.conf"
+echo "font_size 14" >"$STOW_DOTFILES_DIR/terminal/.config/kitty/kitty.conf"
 mkdir -p "$HOME/.config"
 ln -s "$STOW_DOTFILES_DIR/terminal/.config/kitty" "$HOME/.config/kitty"
 
@@ -131,7 +131,7 @@ setup_sandbox
 CUSTOM_REPO="$TEST_TMPDIR/custom_repo"
 CUSTOM_TARGET="$TEST_TMPDIR/custom_target"
 mkdir -p "$CUSTOM_REPO/custom_pkg" "$CUSTOM_TARGET"
-echo "custom content" > "$CUSTOM_REPO/custom_pkg/.custom_config"
+echo "custom content" >"$CUSTOM_REPO/custom_pkg/.custom_config"
 
 assert_success "$STOW_BIN -d $CUSTOM_REPO -t $CUSTOM_TARGET stow custom_pkg" "stow with short flags -d and -t succeeded"
 assert_symlink_exists "$CUSTOM_TARGET/.custom_config" "$CUSTOM_REPO/custom_pkg/.custom_config" "Symlink created in custom target from custom repo"
@@ -151,5 +151,18 @@ assert_file_contains "$LAST_CMD_OUTPUT" "stow-manager" "--help output contains b
 
 assert_success "$STOW_BIN help" "stow-manager help succeeded"
 assert_file_contains "$LAST_CMD_OUTPUT" "stow-manager" "help subcommand output contains binary name"
+
+echo -e "\n${COLOR_BOLD}[Test 9] Dynamic Package Collision Resolution${COLOR_RESET}"
+setup_sandbox
+mkdir -p "$STOW_DOTFILES_DIR/nvim/.config/nvim"
+mkdir -p "$STOW_DOTFILES_DIR/nvim-headless/.config/nvim"
+echo "full config" >"$STOW_DOTFILES_DIR/nvim/.config/nvim/init.lua"
+echo "headless config" >"$STOW_DOTFILES_DIR/nvim-headless/.config/nvim/init.lua"
+
+assert_success "$STOW_BIN stow nvim" "Stowed primary nvim package"
+assert_symlink_exists "$HOME/.config/nvim/init.lua" "$STOW_DOTFILES_DIR/nvim/.config/nvim/init.lua" "nvim symlink active"
+
+assert_success "$STOW_BIN stow nvim-headless" "Stowing colliding nvim-headless package succeeded"
+assert_symlink_exists "$HOME/.config/nvim/init.lua" "$STOW_DOTFILES_DIR/nvim-headless/.config/nvim/init.lua" "nvim-headless symlink now active"
 
 print_summary

@@ -128,6 +128,17 @@ assert_failure() {
     fi
 }
 
+resolve_canonical_path() {
+    local target="$1"
+    if command -v realpath >/dev/null 2>&1; then
+        realpath "$target" 2>/dev/null || true
+    elif readlink -f "$target" >/dev/null 2>&1; then
+        readlink -f "$target" 2>/dev/null || true
+    else
+        readlink "$target" 2>/dev/null || true
+    fi
+}
+
 assert_symlink_exists() {
     local target_path="$1"
     local expected_source="$2"
@@ -142,8 +153,8 @@ assert_symlink_exists() {
 
     local actual_resolved
     local expected_resolved
-    actual_resolved=$(readlink -f "$target_path" 2>/dev/null || true)
-    expected_resolved=$(readlink -f "$expected_source" 2>/dev/null || true)
+    actual_resolved=$(resolve_canonical_path "$target_path")
+    expected_resolved=$(resolve_canonical_path "$expected_source")
 
     local raw_target
     raw_target=$(readlink "$target_path" 2>/dev/null || true)

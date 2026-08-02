@@ -38,6 +38,7 @@ void test_expand_env_vars(void);
 void test_degraded_env_path_resolution(void);
 void test_is_path_prefix(void);
 void test_mkdir_p(void);
+void test_mkdir_p_file_collision(void);
 void test_join_path(void);
 void test_symlink_helpers(void);
 void test_is_executable_in_path(void);
@@ -51,11 +52,14 @@ void test_manifest_add_and_remove_dep(void);
 void test_manifest_malformed_file(void);
 void test_manifest_edit_dep(void);
 void test_package_remove(void);
+void test_manifest_set_target(void);
 
 /* Prototypes from test_config.c */
 void test_config_system(void);
 void test_config_add_remove_dotfiles_dir(void);
 void test_get_active_dotfiles_dir_cascade(void);
+void test_config_sanity_checks(void);
+void test_config_save_disclaimer(void);
 
 /* Prototypes from test_stow.c */
 void test_stowignore(void);
@@ -68,6 +72,8 @@ void test_native_stow_broken_symlink_conflict(void);
 void test_native_unstow_edited_user_file(void);
 void test_native_unstow_recursive_directory_cleanup(void);
 void test_native_stow_ignore_patterns(void);
+void test_dynamic_package_conflicts(void);
+void test_restow_package(void);
 
 /* Prototypes from test_scanner.c */
 void test_scan_package(void);
@@ -75,8 +81,7 @@ void test_scan_package(void);
 /* Prototypes from test_registry.c */
 void test_registry_parsing(void);
 
-int main(void)
-{
+int main(void) {
     printf("\n=== Running Dotfiles Stow Manager C Unit Tests ===\n\n");
 
     // test_utils.c
@@ -98,6 +103,7 @@ int main(void)
     RUN_TEST(test_get_all_packages_skips_dot_dirs);
     RUN_TEST(test_default_stowignore);
     RUN_TEST(test_is_symlink_pointing_to);
+    RUN_TEST(test_mkdir_p_file_collision);
 
     // test_manifest.c
     RUN_TEST(test_manifest_load_save);
@@ -105,11 +111,14 @@ int main(void)
     RUN_TEST(test_manifest_malformed_file);
     RUN_TEST(test_manifest_edit_dep);
     RUN_TEST(test_package_remove);
+    RUN_TEST(test_manifest_set_target);
 
     // test_config.c
     RUN_TEST(test_config_system);
     RUN_TEST(test_config_add_remove_dotfiles_dir);
     RUN_TEST(test_get_active_dotfiles_dir_cascade);
+    RUN_TEST(test_config_sanity_checks);
+    RUN_TEST(test_config_save_disclaimer);
 
     // test_stow.c
     RUN_TEST(test_stowignore);
@@ -122,6 +131,8 @@ int main(void)
     RUN_TEST(test_native_unstow_edited_user_file);
     RUN_TEST(test_native_unstow_recursive_directory_cleanup);
     RUN_TEST(test_native_stow_ignore_patterns);
+    RUN_TEST(test_dynamic_package_conflicts);
+    RUN_TEST(test_restow_package);
 
     // test_scanner.c
     RUN_TEST(test_scan_package);
@@ -130,8 +141,7 @@ int main(void)
     RUN_TEST(test_registry_parsing);
 
     printf("\n=== Test Results: %d Passed, %d Failed ===\n\n",
-           g_tests_run - g_tests_failed,
-           g_tests_failed);
+           g_tests_run - g_tests_failed, g_tests_failed);
 
     return g_tests_failed == 0 ? 0 : 1;
 }
