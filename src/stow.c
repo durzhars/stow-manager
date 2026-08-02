@@ -17,6 +17,7 @@
  */
 
 #define _POSIX_C_SOURCE 200809L
+
 #include "stow.h"
 
 #include <errno.h>
@@ -79,57 +80,88 @@ typedef struct {
 
 static void unfold_symlink_cb(const char* symlink_path, void* user_data) {
     UnfoldContext* ctx = (UnfoldContext*)user_data;
-    if (is_dir(symlink_path)) {
-        char* target = read_symlink_target(symlink_path);
-        if (target && is_path_prefix(target, ctx->dotfiles_dir)) {
-            if (ctx->dry_run) {
-                log_warn("[DRY-RUN] Would unfold directory symlink: %s -> %s",
-                         symlink_path, target);
-            } else {
-                log_warn("Unfolding directory symlink: %s -> %s", symlink_path,
-                         target);
-                char tmp_dir[PATH_MAX * 4];
-                snprintf(tmp_dir, sizeof(tmp_dir), "%s.unfold_tmp_%d",
-                         symlink_path, (int)getpid());
-                register_temp_path(tmp_dir);
-                if (mkdir_p(tmp_dir, 0755) == 0) {
-                    DIR* tdir = opendir(target);
-                    if (tdir) {
-                        struct dirent* entry;
-                        while ((entry = readdir(tdir)) != NULL) {
-                            if (strcmp(entry->d_name, ".") == 0 ||
-                                strcmp(entry->d_name, "..") == 0) {
-                                continue;
-                            }
-                            char child_src[PATH_MAX * 2];
-                            char child_dst[PATH_MAX * 2];
-                            join_path(child_src, sizeof(child_src), target,
-                                      entry->d_name);
-                            join_path(child_dst, sizeof(child_dst), tmp_dir,
-                                      entry->d_name);
-                            symlink(child_src, child_dst);
-                        }
-                        closedir(tdir);
+    if (!is_dir(symlink_path)) {
+        return;
+    }
 
-                        unlink(symlink_path);
+    char* target = read_symlink_target(symlink_path);
+    if (!target) {
+        return;
+    }
+
+    if (is_path_prefix(target, ctx->dotfiles_dir)) {
+        if (ctx->dry_run) {
+            log_warn("[DRY-RUN] Would unfold directory symlink: %s -> %s",
+                     symlink_path, target);
+        } else {
+            log_warn("Unfolding directory symlink: %s -> %s", symlink_path,
+                     target);
+
+            // Inherit permissions from target directory
+            struct stat target_st;
+            mode_t target_mode = 0755;
+            if (stat(target, &target_st) == 0) {
+                target_mode = target_st.st_mode & 0777;
+            }
+
+            char tmp_dir[PATH_MAX * 4];
+            snprintf(tmp_dir, sizeof(tmp_dir), "%s.unfold_tmp_%d", symlink_path,
+                     (int)getpid());
+
+            register_temp_path(tmp_dir);
+
+            if (mkdir_p(tmp_dir, target_mode) == 0) {
+                DIR* tdir = opendir(target);
+                bool copy_success = true;
+
+                if (tdir) {
+                    struct dirent* entry;
+                    while ((entry = readdir(tdir)) != NULL) {
+                        if (strcmp(entry->d_name, ".") == 0 ||
+                            strcmp(entry->d_name, "..") == 0) {
+                            continue;
+                        }
+                        char child_src[PATH_MAX * 2];
+                        char child_dst[PATH_MAX * 2];
+                        join_path(child_src, sizeof(child_src), target,
+                                  entry->d_name);
+                        join_path(child_dst, sizeof(child_dst), tmp_dir,
+                                  entry->d_name);
+
+                        if (symlink(child_src, child_dst) != 0) {
+                            log_error("Failed to symlink unfolded child '%s'",
+                                      child_dst);
+                            copy_success = false;
+                            break;
+                        }
+                    }
+                    closedir(tdir);
+
+                    if (copy_success) {
+                        // Atomic swap: replace symlink without prior unlinking
                         if (rename(tmp_dir, symlink_path) != 0) {
-                            log_error(
-                                "Failed to atomic rename unfolded directory "
-                                "'%s'",
-                                tmp_dir);
+                            unlink(symlink_path);
+                            if (rename(tmp_dir, symlink_path) != 0) {
+                                log_error(
+                                    "Failed to rename unfolded directory "
+                                    "'%s': %s",
+                                    tmp_dir, strerror(errno));
+                            }
                         }
                     } else {
+                        cleanup_temp_dir_contents(tmp_dir);
                         rmdir(tmp_dir);
                     }
+                } else {
+                    rmdir(tmp_dir);
                 }
-                unregister_temp_path(tmp_dir);
             }
-            ctx->unfolded_count++;
+            unregister_temp_path(tmp_dir);
         }
-        if (target) {
-            free(target);
-        }
+        ctx->unfolded_count++;
     }
+
+    free(target);
 }
 
 void unfold_directory_symlinks(const char* target_dir, const char* dotfiles_dir,

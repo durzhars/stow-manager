@@ -146,6 +146,8 @@ bool is_path_ignored(const char *rel_path, const StringArray *raw_ignores);
 typedef void (*WalkSymlinkCallback)(const char *symlink_path, void *user_data);
 typedef void (*WalkFileCallback)(const char *file_path, const char *rel_path, void *user_data);
 
+void cleanup_temp_dir_contents(const char *dir_path);
+
 void walk_dir_symlinks(const char *dir_path,
                        int current_depth,
                        int max_depth,

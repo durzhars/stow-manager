@@ -16,17 +16,19 @@
  * along with this program. If not, see <https://www.gnu.org/licenses/>.
  */
 
+#include <linux/limits.h>
 #define _GNU_SOURCE
 #define _DEFAULT_SOURCE
 #define _POSIX_C_SOURCE 200809L
 
-#include "utils.h"
 #include <limits.h>
 #include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+
+#include "utils.h"
 
 volatile sig_atomic_t g_interrupted = 0;
 
@@ -36,46 +38,62 @@ static volatile sig_atomic_t g_signal_temp_count = 0;
 
 static StringArray g_temp_paths = {NULL, 0, 0};
 
-void register_temp_path(const char *path)
-{
-    if (!path)
+void register_temp_path(const char* path) {
+    if (!path || *path == '\0') {
         return;
+    }
+
     if (!str_array_contains(&g_temp_paths, path)) {
         str_array_append(&g_temp_paths, path);
     }
 
-    if (g_signal_temp_count < MAX_SIGNAL_TEMP_PATHS) {
-        snprintf(
-            g_signal_temp_paths[g_signal_temp_count], sizeof(g_signal_temp_paths[0]), "%s", path);
-        g_signal_temp_count++;
+    for (int i = 0; i < MAX_SIGNAL_TEMP_PATHS; i++) {
+        if (g_signal_temp_paths[i][0] == '\0') {
+            size_t len = strlen(path);
+            if (len >= PATH_MAX) {
+                len = PATH_MAX - 1;
+            }
+            memcpy(&g_signal_temp_paths[i][1], path + 1, len);
+            g_signal_temp_paths[i][len] = '\0';
+// Compiler memory barrier: enforce string completion before publishing index 0
+#if defined(__GNUC__) || defined(__clang__)
+            __asm__ __volatile__("" ::: "memory");
+#endif
+            g_signal_temp_paths[i][0] = path[0];
+            return;
+        }
     }
 }
 
-void unregister_temp_path(const char *path)
-{
-    if (!path)
+void unregister_temp_path(const char* path) {
+    if (!path || *path == '\0') {
         return;
-    StringArray new_paths;
-    str_array_init(&new_paths);
-    for (size_t i = 0; i < g_temp_paths.count; i++) {
-        if (strcmp(g_temp_paths.items[i], path) != 0) {
-            str_array_append(&new_paths, g_temp_paths.items[i]);
+    }
+
+    size_t w = 0;
+    for (size_t r = 0; r < g_temp_paths.count; r++) {
+        if (strcmp(g_temp_paths.items[r], path) == 0) {
+            free(g_temp_paths.items[r]);
+        } else {
+            g_temp_paths.items[w++] = g_temp_paths.items[r];
         }
     }
-    str_array_free(&g_temp_paths);
-    g_temp_paths = new_paths;
+    g_temp_paths.count = w;
 
-    for (sig_atomic_t i = 0; i < g_signal_temp_count; i++) {
+    for (int i = 0; i < MAX_SIGNAL_TEMP_PATHS; i++) {
         if (strcmp(g_signal_temp_paths[i], path) == 0) {
             g_signal_temp_paths[i][0] = '\0';
         }
     }
 }
 
-void cleanup_temp_paths(void)
-{
+void cleanup_temp_paths(void) {
     for (size_t i = 0; i < g_temp_paths.count; i++) {
-        const char *p = g_temp_paths.items[i];
+        const char* p = g_temp_paths.items[i];
+        if (!p || *p == '\0') {
+            continue;
+        }
+
         if (is_dir(p)) {
             char escaped[PATH_MAX * 3];
             escape_shell_arg(p, escaped, sizeof(escaped));
@@ -89,29 +107,35 @@ void cleanup_temp_paths(void)
     str_array_free(&g_temp_paths);
 }
 
-void cleanup_temp_paths_signal_safe(void)
-{
-    for (sig_atomic_t i = 0; i < g_signal_temp_count; i++) {
-        const char *p = g_signal_temp_paths[i];
+void cleanup_temp_paths_signal_safe(void) {
+    // unlink the directory first
+    for (int i = 0; i < MAX_SIGNAL_TEMP_PATHS; i++) {
+        const char* p = g_signal_temp_paths[i];
         if (p && p[0] != '\0') {
             (void)unlink(p);
+        }
+    }
+
+    // and remove the directory
+    for (int i = 0; i < MAX_SIGNAL_TEMP_PATHS; i++) {
+        const char* p = g_signal_temp_paths[i];
+        if (p && p[0] != '\0') {
             (void)rmdir(p);
         }
     }
 }
 
-static void handle_signal_interrupt(int sig)
-{
+static void handle_signal_interrupt(int sig) {
     g_interrupted = sig;
     const char msg[] =
-        "\n[WARNING] Operation interrupted by signal (Ctrl+C). Cleaning up temporary files...\n";
+        "\n[WARNING] Operation interrupted by signal (Ctrl+C). Cleaning up "
+        "temporary files...\n";
     (void)write(STDERR_FILENO, msg, sizeof(msg) - 1);
     cleanup_temp_paths_signal_safe();
     _exit(128 + sig);
 }
 
-void setup_signal_handlers(void)
-{
+void setup_signal_handlers(void) {
     struct sigaction sa;
     memset(&sa, 0, sizeof(sa));
     sa.sa_handler = handle_signal_interrupt;
