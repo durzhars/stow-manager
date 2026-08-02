@@ -26,7 +26,8 @@
 void test_registry_parsing(void)
 {
     char tmp_dir[PATH_MAX];
-    ASSERT(create_test_tmp_dir(tmp_dir, sizeof(tmp_dir), "reg") != NULL, "Should create temporary test directory");
+    ASSERT(create_test_tmp_dir(tmp_dir, sizeof(tmp_dir), "reg") != NULL,
+           "Should create temporary test directory");
 
     char reg_path[PATH_MAX * 4];
     snprintf(reg_path, sizeof(reg_path), "%s/stow.registry", tmp_dir);

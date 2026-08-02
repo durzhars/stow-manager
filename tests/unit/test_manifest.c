@@ -26,7 +26,8 @@
 void test_manifest_load_save(void)
 {
     char tmp_dir[PATH_MAX];
-    ASSERT(create_test_tmp_dir(tmp_dir, sizeof(tmp_dir), "man_save") != NULL, "Should create temporary test directory");
+    ASSERT(create_test_tmp_dir(tmp_dir, sizeof(tmp_dir), "man_save") != NULL,
+           "Should create temporary test directory");
 
     char pkg_dir[PATH_MAX * 4];
     snprintf(pkg_dir, sizeof(pkg_dir), "%s/testpkg", tmp_dir);
@@ -63,7 +64,8 @@ void test_manifest_load_save(void)
 void test_manifest_add_and_remove_dep(void)
 {
     char tmp_dir[PATH_MAX];
-    ASSERT(create_test_tmp_dir(tmp_dir, sizeof(tmp_dir), "man_dep") != NULL, "Should create temporary directory for manifest dep test");
+    ASSERT(create_test_tmp_dir(tmp_dir, sizeof(tmp_dir), "man_dep") != NULL,
+           "Should create temporary directory for manifest dep test");
 
     char pkg_dir[PATH_MAX];
     snprintf(pkg_dir, sizeof(pkg_dir), "%s/mypkg", tmp_dir);
@@ -145,7 +147,8 @@ void test_manifest_malformed_file(void)
 void test_manifest_edit_dep(void)
 {
     char tmp_dir[PATH_MAX];
-    ASSERT(create_test_tmp_dir(tmp_dir, sizeof(tmp_dir), "man_edt") != NULL, "Should create temporary directory for manifest edit test");
+    ASSERT(create_test_tmp_dir(tmp_dir, sizeof(tmp_dir), "man_edt") != NULL,
+           "Should create temporary directory for manifest edit test");
 
     char pkg_dir[PATH_MAX];
     snprintf(pkg_dir, sizeof(pkg_dir), "%s/editpkg", tmp_dir);
@@ -174,8 +177,10 @@ void test_package_remove(void)
 {
     char tmp_dotfiles[PATH_MAX];
     char tmp_target[PATH_MAX];
-    ASSERT(create_test_tmp_dir(tmp_dotfiles, sizeof(tmp_dotfiles), "pkg_rm_dot") != NULL, "Should create temporary dotfiles directory");
-    ASSERT(create_test_tmp_dir(tmp_target, sizeof(tmp_target), "pkg_rm_tgt") != NULL, "Should create temporary target directory");
+    ASSERT(create_test_tmp_dir(tmp_dotfiles, sizeof(tmp_dotfiles), "pkg_rm_dot") != NULL,
+           "Should create temporary dotfiles directory");
+    ASSERT(create_test_tmp_dir(tmp_target, sizeof(tmp_target), "pkg_rm_tgt") != NULL,
+           "Should create temporary target directory");
 
     char pkg_dir[PATH_MAX];
     snprintf(pkg_dir, sizeof(pkg_dir), "%s/rmpkg", tmp_dotfiles);
@@ -201,7 +206,8 @@ void test_package_remove(void)
 void test_manifest_set_target(void)
 {
     char tmp_dir[PATH_MAX];
-    ASSERT(create_test_tmp_dir(tmp_dir, sizeof(tmp_dir), "man_tgt") != NULL, "Should create temporary test directory");
+    ASSERT(create_test_tmp_dir(tmp_dir, sizeof(tmp_dir), "man_tgt") != NULL,
+           "Should create temporary test directory");
 
     char pkg_dir[PATH_MAX];
     snprintf(pkg_dir, sizeof(pkg_dir), "%s/tgtpkg", tmp_dir);

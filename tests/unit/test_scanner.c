@@ -23,7 +23,8 @@
 #include "../include/scanner.h"
 #include "test_framework.h"
 
-void test_scan_package(void) {
+void test_scan_package(void)
+{
     char tmp_dotfiles[PATH_MAX];
     ASSERT(create_test_tmp_dir(tmp_dotfiles, sizeof(tmp_dotfiles), "scan_pkg") != NULL,
            "Should create temporary dotfiles directory");
