@@ -44,7 +44,6 @@ static void config_load_active(Config *cfg)
     (void)config_load(cfg);
 }
 
-// Path Resolution Helper for Config Mutators
 static bool prepare_config_path(const char *input_path,
                                 char *out_buf,
                                 size_t buf_size,
@@ -56,13 +55,28 @@ static bool prepare_config_path(const char *input_path,
         return false;
     }
 
-    expand_tilde_path(input_path, out_buf, buf_size);
+    char temp[PATH_MAX];
+    expand_tilde_path(input_path, temp, sizeof(temp));
+
+    // If path is relative, prepending current working directory turns it absolute
+    if (temp[0] != '/') {
+        char cwd[PATH_MAX];
+        if (getcwd(cwd, sizeof(cwd))) {
+            join_path(out_buf, buf_size, cwd, temp);
+        } else {
+            snprintf(out_buf, buf_size, "%s", temp);
+        }
+    } else {
+        snprintf(out_buf, buf_size, "%s", temp);
+    }
+
+    collapse_path(out_buf);
     normalize_path(out_buf);
 
     if (check_sanity) {
         PathSanityResult sanity = verify_path_sanity(out_buf);
         if (sanity != PATH_VALID) {
-            log_error("Cannot set %s '%s': %s", context, out_buf, path_sanity_strerror(sanity));
+            log_error("Cannot set %s: %s", context, path_sanity_strerror(sanity, out_buf));
             return false;
         }
     }
@@ -385,10 +399,7 @@ void get_active_dotfiles_dir(const char *cli_override, char *buf, size_t buf_siz
 validate:;
     PathSanityResult sanity = verify_path_sanity(buf);
     if (sanity != PATH_VALID) {
-        log_error("Fatal: Dotfiles directory '%s' is inaccessible or invalid (%s). "
-                  "Exiting.",
-                  buf,
-                  path_sanity_strerror(sanity));
+        log_error("Fatal: Source directory error: %s. Exiting.", path_sanity_strerror(sanity, buf));
         exit(EXIT_FAILURE);
     }
 }
@@ -431,10 +442,7 @@ void get_active_target_dir(const char *cli_override, char *buf, size_t buf_size)
 
     PathSanityResult sanity = verify_path_sanity(buf);
     if (sanity != PATH_VALID) {
-        log_error("Fatal: Target directory '%s' is inaccessible or invalid (%s). "
-                  "Exiting.",
-                  buf,
-                  path_sanity_strerror(sanity));
+        log_error("Fatal: Target directory error: %s. Exiting.", path_sanity_strerror(sanity, buf));
         exit(EXIT_FAILURE);
     }
 }
@@ -450,10 +458,8 @@ void get_active_target_dir_for_pkg(const char *cli_override,
         normalize_path(buf);
         PathSanityResult sanity = verify_path_sanity(buf);
         if (sanity != PATH_VALID) {
-            log_error("Fatal: Override target directory '%s' is inaccessible or "
-                      "invalid (%s). Exiting.",
-                      buf,
-                      path_sanity_strerror(sanity));
+            log_error("Fatal: Override target directory invalid: %s. Exiting.",
+                      path_sanity_strerror(sanity, buf));
             exit(EXIT_FAILURE);
         }
         return;
@@ -470,11 +476,8 @@ void get_active_target_dir_for_pkg(const char *cli_override,
 
             PathSanityResult sanity = verify_path_sanity(buf);
             if (sanity != PATH_VALID) {
-                log_error("Fatal: Package manifest target directory '%s' is "
-                          "inaccessible or "
-                          "invalid (%s). Exiting.",
-                          buf,
-                          path_sanity_strerror(sanity));
+                log_error("Fatal: Package manifest target directory invalid: %s. Exiting.",
+                          path_sanity_strerror(sanity, buf));
                 exit(EXIT_FAILURE);
             }
             return;

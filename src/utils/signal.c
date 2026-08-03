@@ -34,7 +34,6 @@ volatile sig_atomic_t g_interrupted = 0;
 
 #define MAX_SIGNAL_TEMP_PATHS 64
 static char g_signal_temp_paths[MAX_SIGNAL_TEMP_PATHS][PATH_MAX];
-static volatile sig_atomic_t g_signal_temp_count = 0;
 
 static StringArray g_temp_paths = {NULL, 0, 0};
 

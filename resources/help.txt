@@ -21,6 +21,13 @@ DEPENDENCY MANAGEMENT (deps):
   deps show <pkg>           Display raw .stowdeps manifest contents
   deps target <pkg> <path>  Set per-package target directory in .stowdeps manifest
 
+FILE FILTERING (ignore):
+  ignore init [pkg...]      Scaffold global or package-level .stowignore template
+  ignore add [pkg] <pat...> Append glob pattern(s) to package or global .stowignore
+  ignore remove [pkg] <pat> Remove glob pattern(s) from .stowignore (-g for global)
+  ignore clear [pkg...]     Purge .stowignore file(s) for package(s) or repo root
+  ignore show [pkg...]      Display active .stowignore patterns
+
 DIAGNOSTICS & REPAIR:
   check [pkg...]            Verify dependencies and symlink integrity for packages
   check symlinks            Scan for broken or unmanaged orphan symlinks

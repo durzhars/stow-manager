@@ -19,6 +19,10 @@
 #define _GNU_SOURCE
 #define _DEFAULT_SOURCE
 #define _POSIX_C_SOURCE 200809L
+#ifndef STR
+#define XSTR(s) #s
+#define STR(s) XSTR(s)
+#endif
 
 #include "utils.h"
 #include <fnmatch.h>
@@ -138,7 +142,7 @@ void get_default_stowignore(StringArray *ignore_patterns)
 
 #ifdef DATADIR
     char p3[PATH_MAX * 2];
-    snprintf(p3, sizeof(p3), "%s/stow-manager/%s", DATADIR, filename);
+    snprintf(p3, sizeof(p3), "%s/stow-manager/%s", STR(DATADIR), filename);
     str_array_append(&search_paths, p3);
 #endif
 

@@ -8,26 +8,27 @@ DATADIR ?= $(DATAROOTDIR)
 SYSCONFDIR ?= $(PREFIX)/etc
 
 CC ?= gcc
-CFLAGS ?= -Wall -Wextra -pedantic -Wconversion -Wsign-conversion -Wno-overlength-strings -std=c17 -O2 -Iinclude -DDATADIR=\"$(DATADIR)\" -DSYSCONFDIR=\"$(SYSCONFDIR)\"
+CFLAGS ?= -Wall -Wextra -pedantic -Wconversion -Wsign-conversion -Wno-overlength-strings -std=c17 -O2 -Iinclude -DDATADIR=$(DATADIR) -DSYSCONFDIR=$(SYSCONFDIR)
 LDFLAGS ?=
-
-# Reusable Clang optimization & diagnostic profiles
-CLANG_OPT_FLAGS = -O3 -fomit-frame-pointer -flto=thin -fsave-optimization-record -Rpass=inline -Rpass-missed=loop-vectorize
-CLANG_OPT_LDFLAGS = -flto=thin -fuse-ld=lld
-CLANG_SAN_FLAGS = -fsanitize=address,undefined -fno-omit-frame-pointer -g
 
 SRC_DIR = src
 INC_DIR = include
 BUILD_DIR = build
 BIN_DIR = bin
+OPT_DIR = $(BUILD_DIR)/opt_records
 TEST_DIR = tests
 TEST_UNIT_DIR = $(TEST_DIR)/unit
 TEST_FEATURE_DIR = $(TEST_DIR)/feature
 
+# Reusable Clang optimization & diagnostic profiles
+CLANG_OPT_FLAGS = -O3 -fomit-frame-pointer -flto=thin -fsave-optimization-record=yaml -foptimization-record-file=$(OPT_DIR)/opt.yaml -Rpass=inline -Rpass-missed=loop-vectorize
+CLANG_OPT_LDFLAGS = -flto=thin -fuse-ld=lld
+CLANG_SAN_FLAGS = -fsanitize=address,undefined -fno-omit-frame-pointer -g
+
 SRCS = $(SRC_DIR)/main.c \
-	   $(SRC_DIR)/cli.c \
-	   $(SRC_DIR)/cmd_dispatch.c \
-	   $(SRC_DIR)/ignore.c \
+       $(SRC_DIR)/cli.c \
+       $(SRC_DIR)/cmd_dispatch.c \
+       $(SRC_DIR)/ignore.c \
        $(SRC_DIR)/help.c \
        $(SRC_DIR)/logger.c \
        $(SRC_DIR)/utils/mem.c \
@@ -82,11 +83,12 @@ format:
 format-check:
 	clang-format --dry-run --Werror $(SRCS) $(TEST_SRCS) include/*.h tests/unit/*.h
 
-# Compile using Clang with Thin LTO, aggressive optimization (-O3) and remarks
+# Compile using Clang with Thin LTO, aggressive optimization (-O3) and isolated optimization records
 build-clang-opt: CC = clang
 build-clang-opt: CFLAGS += $(CLANG_OPT_FLAGS)
 build-clang-opt: LDFLAGS += $(CLANG_OPT_LDFLAGS)
-build-clang-opt: clean $(TARGET)
+build-clang-opt: clean | $(OPT_DIR)
+build-clang-opt: $(TARGET)
 
 # Compile using Clang with sanitizers enabled (ASan + UBSan)
 build-sanitize: CC = clang
@@ -94,17 +96,17 @@ build-sanitize: CFLAGS += $(CLANG_SAN_FLAGS)
 build-sanitize: LDFLAGS += $(CLANG_SAN_FLAGS)
 build-sanitize: clean $(TARGET)
 
-# Two-stage Profile-Guided Optimization (PGO) using Clang & ThinLTO
+# Clean multi-stage PGO utilizing standard object file rules
 build-pgo: CC = clang
-build-pgo: clean
+build-pgo: clean | $(OPT_DIR)
 	@echo "=== Stage 1: Building instrumented binary ==="
-	@mkdir -p bin build
-	$(CC) $(CFLAGS) $(CLANG_OPT_FLAGS) -fprofile-instr-generate $(SRCS) -o $(TARGET) $(LDFLAGS) $(CLANG_OPT_LDFLAGS)
+	$(MAKE) CC=clang CFLAGS="$(CFLAGS) $(CLANG_OPT_FLAGS) -fprofile-instr-generate" LDFLAGS="$(LDFLAGS) $(CLANG_OPT_LDFLAGS) -fprofile-instr-generate" $(TARGET)
 	@echo "=== Stage 2: Collecting execution workload profile ==="
 	-@bash $(TEST_FEATURE_DIR)/run_feature_tests.sh > /dev/null 2>&1
 	@llvm-profdata merge -output=stow_app.profdata default.profraw 2>/dev/null || true
 	@echo "=== Stage 3: Compiling PGO production binary with profile feedback ==="
-	$(CC) $(CFLAGS) $(CLANG_OPT_FLAGS) -fprofile-instr-use=stow_app.profdata $(SRCS) -o $(TARGET) $(LDFLAGS) $(CLANG_OPT_LDFLAGS)
+	$(MAKE) clean && mkdir -p $(OPT_DIR)
+	$(MAKE) CC=clang CFLAGS="$(CFLAGS) $(CLANG_OPT_FLAGS) -fprofile-instr-use=stow_app.profdata" LDFLAGS="$(LDFLAGS) $(CLANG_OPT_LDFLAGS) -fprofile-instr-use=stow_app.profdata" $(TARGET)
 	@rm -f default.profraw stow_app.profdata
 	@echo "=== PGO build complete ==="
 
@@ -141,11 +143,14 @@ $(BUILD_DIR)/%.o: $(TEST_UNIT_DIR)/%.c | $(BUILD_DIR)
 $(BUILD_DIR):
 	mkdir -p $(BUILD_DIR)
 
+$(OPT_DIR): | $(BUILD_DIR)
+	mkdir -p $(OPT_DIR)
+
 $(BIN_DIR):
 	mkdir -p $(BIN_DIR)
 
 clean:
-	rm -rf $(BUILD_DIR) $(BIN_DIR)
+	rm -rf $(BUILD_DIR) $(BIN_DIR) *.opt.yaml
 
 install: $(TARGET)
 	install -d $(DESTDIR)$(BINDIR)

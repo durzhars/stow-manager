@@ -82,7 +82,7 @@ typedef enum {
 
 PathSanityResult verify_path_sanity(const char *path);
 PathSanityResult verify_home_path_sanity(const char *path);
-const char *path_sanity_strerror(PathSanityResult res);
+const char *path_sanity_strerror(PathSanityResult res, const char *path);
 bool get_user_home_dir(char *buf, size_t buf_size);
 
 typedef enum { XDG_CONFIG = 0, XDG_DATA, XDG_CACHE, XDG_STATE } XdgDirType;

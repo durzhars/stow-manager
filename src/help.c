@@ -18,6 +18,10 @@
 
 #define _GNU_SOURCE
 #define _POSIX_C_SOURCE 200809L
+#ifndef STR
+#define XSTR(s) #s
+#define STR(s) XSTR(s)
+#endif
 
 #include "help.h"
 #include <stdio.h>
@@ -131,7 +135,7 @@ void show_help(void)
 
 #ifdef DATADIR
     char p3[PATH_MAX * 2];
-    snprintf(p3, sizeof(p3), "%s/stow-manager/%s", DATADIR, help_filename);
+    snprintf(p3, sizeof(p3), "%s/stow-manager/%s", STR(DATADIR), help_filename);
     str_array_append(&search_paths, p3);
 #endif
 

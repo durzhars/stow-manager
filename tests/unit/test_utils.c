@@ -763,19 +763,35 @@ void test_walk_dir_files_and_cleanup(void)
 
 void test_path_sanity_strerror(void)
 {
-    ASSERT_STR_EQ(path_sanity_strerror(PATH_VALID), "path is valid");
-    ASSERT_STR_EQ(path_sanity_strerror(ERR_PATH_EMPTY), "path string is empty or NULL");
-    ASSERT_STR_EQ(path_sanity_strerror(ERR_NOT_ABSOLUTE),
-                  "path is not an absolute path (must start with '/')");
-    ASSERT_STR_EQ(path_sanity_strerror(ERR_NOT_A_DIRECTORY),
-                  "path is not a directory (e.g. /dev/null or regular file)");
-    ASSERT_STR_EQ(path_sanity_strerror(ERR_NOT_OWNED_BY_USER),
-                  "directory owner UID does not match running process UID");
-    ASSERT_STR_EQ(path_sanity_strerror(ERR_WORLD_WRITABLE),
-                  "directory is world-writable (security violation, e.g. 1777 /tmp)");
-    ASSERT_STR_EQ(path_sanity_strerror(ERR_INSUFFICIENT_PERMS),
-                  "insufficient permissions (requires read, write, and search/execute access)");
-    ASSERT_STR_EQ(path_sanity_strerror((PathSanityResult)999), "unknown path sanity error");
+    const char *p = "/fake/path";
+    char expected_uid_msg[256];
+
+    // Pre-format the expected message that relies on the system's active UID
+    snprintf(expected_uid_msg,
+             sizeof(expected_uid_msg),
+             "directory owner UID does not match running UID %u",
+             getuid());
+
+    ASSERT_STR_EQ(path_sanity_strerror(PATH_VALID, p), "path '/fake/path' is valid");
+
+    ASSERT_STR_EQ(path_sanity_strerror(ERR_PATH_EMPTY, NULL), "path string is empty or NULL");
+
+    ASSERT_STR_EQ(path_sanity_strerror(ERR_NOT_ABSOLUTE, "dotfiles"),
+                  "path 'dotfiles' is not absolute (must start with '/')");
+
+    ASSERT_STR_EQ(path_sanity_strerror(ERR_NOT_A_DIRECTORY, "/dev/null"),
+                  "'/dev/null' is not a directory");
+
+    ASSERT_STR_EQ(path_sanity_strerror(ERR_NOT_OWNED_BY_USER, p), expected_uid_msg);
+
+    ASSERT_STR_EQ(path_sanity_strerror(ERR_WORLD_WRITABLE, p),
+                  "'/fake/path' is world-writable (security violation)");
+
+    ASSERT_STR_EQ(path_sanity_strerror(ERR_INSUFFICIENT_PERMS, p),
+                  "insufficient permissions for '/fake/path' (rwx access required)");
+
+    ASSERT_STR_EQ(path_sanity_strerror((PathSanityResult)999, p),
+                  "unknown path sanity error for '/fake/path'");
 }
 
 void test_temp_path_registration(void)

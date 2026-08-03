@@ -200,28 +200,60 @@ bool get_user_home_dir(char *buf, size_t buf_size)
     return false;
 }
 
-const char *path_sanity_strerror(PathSanityResult res)
+const char *path_sanity_strerror(PathSanityResult res, const char *path)
 {
+    static _Thread_local char buf[512];
+    const char *p = (path && *path) ? path : "<empty>";
+
+    struct stat st;
+    bool has_stat = (path && stat(path, &st) == 0);
+
     switch (res) {
     case PATH_VALID:
-        return "path is valid";
+        snprintf(buf, sizeof(buf), "path '%s' is valid", p);
+        break;
     case ERR_PATH_EMPTY:
-        return "path string is empty or NULL";
+        snprintf(buf, sizeof(buf), "path string is empty or NULL");
+        break;
     case ERR_NOT_ABSOLUTE:
-        return "path is not an absolute path (must start with '/')";
+        snprintf(buf, sizeof(buf), "path '%s' is not absolute (must start with '/')", p);
+        break;
     case ERR_NOT_A_DIRECTORY:
-        return "path is not a directory (e.g. /dev/null or regular file)";
+        snprintf(buf, sizeof(buf), "'%s' is not a directory", p);
+        break;
     case ERR_NOT_OWNED_BY_USER:
-        return "directory owner UID does not match running process UID";
+        if (has_stat) {
+            snprintf(buf,
+                     sizeof(buf),
+                     "owner UID %u of '%s' does not match running UID %u",
+                     st.st_uid,
+                     p,
+                     getuid());
+        } else {
+            snprintf(
+                buf, sizeof(buf), "directory owner UID does not match running UID %u", getuid());
+        }
+        break;
     case ERR_WORLD_WRITABLE:
-        return "directory is world-writable (security violation, e.g. 1777 "
-               "/tmp)";
+        if (has_stat) {
+            snprintf(buf,
+                     sizeof(buf),
+                     "'%s' permissions (%04o) are world-writable (security violation)",
+                     p,
+                     st.st_mode & 07777);
+        } else {
+            snprintf(buf, sizeof(buf), "'%s' is world-writable (security violation)", p);
+        }
+        break;
     case ERR_INSUFFICIENT_PERMS:
-        return "insufficient permissions (requires read, write, and "
-               "search/execute access)";
+        snprintf(buf, sizeof(buf), "insufficient permissions for '%s' (rwx access required)", p);
+        break;
     default:
-        return "unknown path sanity error";
+        snprintf(buf, sizeof(buf), "unknown path sanity error for '%s'", p);
+        break;
     }
+
+    return buf;
 }
 
 PathSanityResult verify_home_path_sanity(const char *path)
@@ -327,9 +359,12 @@ bool app_env_resolve(AppEnvironment *env, const char *cli_target_override)
         if (!env->is_target_override) {
             const char *raw_home = getenv("HOME");
             PathSanityResult reason = verify_home_path_sanity(raw_home);
-            log_error("Fatal: Invalid or missing $HOME directory (%s). Exiting.",
-                      path_sanity_strerror(reason));
-            return false;
+            if (reason != PATH_VALID) {
+                log_error("Fatal: Invalid or missing $HOME directory (%s). Exiting.",
+                          path_sanity_strerror(reason, raw_home));
+                return false;
+            }
+            snprintf(env->target_dir, sizeof(env->target_dir), "%s", raw_home ? raw_home : "");
         }
     } else if (!env->is_target_override) {
         snprintf(env->target_dir, sizeof(env->target_dir), "%s", env->home_dir);

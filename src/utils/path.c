@@ -47,7 +47,7 @@ void normalize_path(char *path)
         r++;
     }
     *w = '\0';
-    size_t len = w - path;
+    size_t len = (size_t)(w - path);
     if (len > 1 && path[len - 1] == '/') {
         path[len - 1] = '\0';
     }
@@ -87,7 +87,7 @@ void collapse_path(char *path)
         if (len == 2 && start[0] == '.' && start[1] == '.') {
             if (depth > 0) {
                 size_t prev = stack[depth - 1];
-                if (!is_abs && (size_t)(w - path - prev) == 2 && path[prev] == '.' &&
+                if (!is_abs && (size_t)(w - (size_t)path - prev) == 2 && path[prev] == '.' &&
                     path[prev + 1] == '.') {
                     depth++;
                     if (w > path && *(w - 1) != '/') {
