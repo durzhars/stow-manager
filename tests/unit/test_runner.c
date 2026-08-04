@@ -48,6 +48,7 @@ void test_is_symlink_pointing_to(void);
 void test_walk_dir_files_and_cleanup(void);
 void test_path_sanity_strerror(void);
 void test_temp_path_registration(void);
+void test_path_parsing_traversal_and_naming_edge_cases(void);
 
 /* Prototypes from test_manifest.c */
 void test_manifest_load_save(void);
@@ -127,6 +128,7 @@ int main(void)
     RUN_TEST(test_walk_dir_files_and_cleanup);
     RUN_TEST(test_path_sanity_strerror);
     RUN_TEST(test_temp_path_registration);
+    RUN_TEST(test_path_parsing_traversal_and_naming_edge_cases);
 
     // test_manifest.c
     RUN_TEST(test_manifest_load_save);

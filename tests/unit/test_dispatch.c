@@ -97,6 +97,12 @@ void test_dispatch_command_routes(void)
     ASSERT(res6 == 1, "dispatch_command 'stow' without pkg should fail with 1 error");
     str_array_free(&args);
 
+    // 7. Dispatch zero arguments
+    str_array_init(&args);
+    int res7 = dispatch_command(&args, &opts);
+    ASSERT(res7 == 1, "dispatch_command zero arguments should fail with 1 error");
+    str_array_free(&args);
+
     cleanup_test_dir(tmp_dotfiles);
     cleanup_test_dir(tmp_target);
 }

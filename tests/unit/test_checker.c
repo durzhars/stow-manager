@@ -30,10 +30,12 @@ void test_check_package_dependencies(void)
            "Should create temporary dotfiles directory");
 
     char pkg_dir[PATH_MAX];
-    snprintf(pkg_dir, sizeof(pkg_dir), "%s/chkpkg", tmp_dotfiles);
+    int snp_res = snprintf(pkg_dir, sizeof(pkg_dir), "%s/chkpkg", tmp_dotfiles);
+    ASSERT(snp_res > 0 && (size_t)snp_res < sizeof(pkg_dir),
+           "snprintf should successfully format pkg_dir without truncation");
     ASSERT(mkdir(pkg_dir, 0755) == 0, "Should create chkpkg directory");
 
-    // Add manifest with valid tool 'sh' and non-existent tool 'nonexistent_tool_123'
+    // Add manifest with valid tool 'sh' and non-existent tool 'nonexistent_tool_xyz_99'
     manifest_add_dep(tmp_dotfiles, "chkpkg", "sh", "--required");
     manifest_add_dep(tmp_dotfiles, "chkpkg", "nonexistent_tool_xyz_99", "--optional");
 
