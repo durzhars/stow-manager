@@ -37,7 +37,7 @@ static const char *EMBEDDED_HELP_TXT = "Dotfiles Stow Manager (stow-manager)\n\n
                                        "Run make to compile full help menu or pass -h / --help.\n";
 #endif
 
-static void render_plain_line(const char *line, bool use_color)
+static void render_plain_line(const char *line, int use_color)
 {
     size_t len = strlen(line);
 
@@ -103,56 +103,9 @@ static void render_plain_line(const char *line, bool use_color)
 
 void show_help(void)
 {
-    bool use_color = isatty(STDOUT_FILENO) != 0 && getenv("NO_COLOR") == NULL;
+    int use_color = isatty(STDOUT_FILENO) != 0 && getenv("NO_COLOR") == NULL;
 
-    /* Always use help.txt — spacing is 1:1 with terminal output */
-    const char *help_filename = "help.txt";
-
-    StringArray search_paths;
-    str_array_init(&search_paths);
-
-    char data_home[PATH_MAX];
-    get_xdg_data_home(data_home, sizeof(data_home));
-    char p1[PATH_MAX * 2];
-    snprintf(p1, sizeof(p1), "%s/stow-manager/%s", data_home, help_filename);
-    str_array_append(&search_paths, p1);
-
-    char config_home[PATH_MAX];
-    get_xdg_config_home(config_home, sizeof(config_home));
-    char p2[PATH_MAX * 2];
-    snprintf(p2, sizeof(p2), "%s/stow-manager/%s", config_home, help_filename);
-    str_array_append(&search_paths, p2);
-
-    StringArray data_dirs;
-    str_array_init(&data_dirs);
-    get_xdg_data_dirs(&data_dirs);
-    for (size_t i = 0; i < data_dirs.count; i++) {
-        char path[PATH_MAX * 2];
-        snprintf(path, sizeof(path), "%s/stow-manager/%s", data_dirs.items[i], help_filename);
-        str_array_append(&search_paths, path);
-    }
-    str_array_free(&data_dirs);
-
-#ifdef DATADIR
-    char p3[PATH_MAX * 2];
-    snprintf(p3, sizeof(p3), "%s/stow-manager/%s", STR(DATADIR), help_filename);
-    str_array_append(&search_paths, p3);
-#endif
-
-    char p_res[PATH_MAX];
-    snprintf(p_res, sizeof(p_res), "resources/%s", help_filename);
-    str_array_append(&search_paths, p_res);
-
-    FILE *fp = NULL;
-    for (size_t i = 0; i < search_paths.count; i++) {
-        if (file_exists(search_paths.items[i])) {
-            fp = fopen(search_paths.items[i], "r");
-            if (fp) {
-                break;
-            }
-        }
-    }
-
+    FILE *fp = open_resource_file("help.txt");
     if (fp) {
         char line[1024];
         while (fgets(line, sizeof(line), fp)) {
@@ -172,6 +125,4 @@ void show_help(void)
             free(copy);
         }
     }
-
-    str_array_free(&search_paths);
 }

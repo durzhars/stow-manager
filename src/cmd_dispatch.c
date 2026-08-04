@@ -20,6 +20,7 @@
 #define _POSIX_C_SOURCE 200809L
 
 #include "cmd_dispatch.h"
+#include "cmd_routes.h"
 
 #include <stdio.h>
 #include <string.h>
@@ -147,29 +148,29 @@ action_remove(const char *dotfiles, const char *target, const char *pkg, const C
     return 0;
 }
 
-static int cmd_stow(const CommandContext *ctx)
+int cmd_stow(const CommandContext *ctx)
 {
     return foreach_package(ctx, action_stow);
 }
 
-static int cmd_unstow(const CommandContext *ctx)
+int cmd_unstow(const CommandContext *ctx)
 {
     return foreach_package(ctx, action_unstow);
 }
 
-static int cmd_restow(const CommandContext *ctx)
+int cmd_restow(const CommandContext *ctx)
 {
     return foreach_package(ctx, action_restow);
 }
 
-static int cmd_all(const CommandContext *ctx)
+int cmd_all(const CommandContext *ctx)
 {
     stow_all_packages(
         ctx->dotfiles_dir, ctx->global_target_dir, ctx->opts->auto_install, ctx->opts->dry_run);
     return 0;
 }
 
-static int cmd_diff(const CommandContext *ctx)
+int cmd_diff(const CommandContext *ctx)
 {
     if (ctx->args->count > ctx->arg_offset) {
         return foreach_package(ctx, action_diff);
@@ -178,7 +179,7 @@ static int cmd_diff(const CommandContext *ctx)
     return 0;
 }
 
-static int cmd_scan(const CommandContext *ctx)
+int cmd_scan(const CommandContext *ctx)
 {
     if (ctx->args->count > ctx->arg_offset) {
         for (size_t i = ctx->arg_offset; i < ctx->args->count; i++) {
@@ -196,7 +197,7 @@ static int cmd_scan(const CommandContext *ctx)
     return 0;
 }
 
-static int cmd_check(const CommandContext *ctx)
+int cmd_check(const CommandContext *ctx)
 {
     if (ctx->args->count > ctx->arg_offset &&
         strcmp(ctx->args->items[ctx->arg_offset], "symlinks") == 0) {
@@ -219,19 +220,19 @@ static int cmd_check(const CommandContext *ctx)
     return 0;
 }
 
-static int cmd_check_symlinks(const CommandContext *ctx)
+int cmd_check_symlinks(const CommandContext *ctx)
 {
     check_symlink_health(ctx->dotfiles_dir, ctx->global_target_dir);
     return 0;
 }
 
-static int cmd_fix_conflicts(const CommandContext *ctx)
+int cmd_fix_conflicts(const CommandContext *ctx)
 {
     unfold_directory_symlinks(ctx->global_target_dir, ctx->dotfiles_dir, ctx->opts->dry_run);
     return 0;
 }
 
-static int cmd_pkg_create(const CommandContext *ctx)
+int cmd_pkg_create(const CommandContext *ctx)
 {
     const char *pkg = ctx->args->items[ctx->arg_offset];
     PackageManifest manifest;
@@ -242,18 +243,18 @@ static int cmd_pkg_create(const CommandContext *ctx)
     return 0;
 }
 
-static int cmd_pkg_remove(const CommandContext *ctx)
+int cmd_pkg_remove(const CommandContext *ctx)
 {
     return foreach_package(ctx, action_remove);
 }
 
-static int cmd_pkg_list(const CommandContext *ctx)
+int cmd_pkg_list(const CommandContext *ctx)
 {
     list_packages_status(ctx->dotfiles_dir, ctx->global_target_dir);
     return 0;
 }
 
-static int cmd_deps_add(const CommandContext *ctx)
+int cmd_deps_add(const CommandContext *ctx)
 {
     const char *pkg = ctx->args->items[ctx->arg_offset];
     const char *dep = ctx->args->items[ctx->arg_offset + 1];
@@ -264,7 +265,7 @@ static int cmd_deps_add(const CommandContext *ctx)
     return 0;
 }
 
-static int cmd_deps_edit(const CommandContext *ctx)
+int cmd_deps_edit(const CommandContext *ctx)
 {
     manifest_edit_dep(ctx->dotfiles_dir,
                       ctx->args->items[ctx->arg_offset],
@@ -273,7 +274,7 @@ static int cmd_deps_edit(const CommandContext *ctx)
     return 0;
 }
 
-static int cmd_deps_remove(const CommandContext *ctx)
+int cmd_deps_remove(const CommandContext *ctx)
 {
     manifest_remove_dep(ctx->dotfiles_dir,
                         ctx->args->items[ctx->arg_offset],
@@ -281,13 +282,13 @@ static int cmd_deps_remove(const CommandContext *ctx)
     return 0;
 }
 
-static int cmd_deps_show(const CommandContext *ctx)
+int cmd_deps_show(const CommandContext *ctx)
 {
     manifest_show(ctx->dotfiles_dir, ctx->args->items[ctx->arg_offset]);
     return 0;
 }
 
-static int cmd_deps_target(const CommandContext *ctx)
+int cmd_deps_target(const CommandContext *ctx)
 {
     manifest_set_target(ctx->dotfiles_dir,
                         ctx->args->items[ctx->arg_offset],
@@ -295,7 +296,7 @@ static int cmd_deps_target(const CommandContext *ctx)
     return 0;
 }
 
-static int cmd_ignore_init(const CommandContext *ctx)
+int cmd_ignore_init(const CommandContext *ctx)
 {
     size_t count = ctx->args->count - ctx->arg_offset;
     const char *const *pkgs =
@@ -304,7 +305,7 @@ static int cmd_ignore_init(const CommandContext *ctx)
     return 0;
 }
 
-static int cmd_ignore_add(const CommandContext *ctx)
+int cmd_ignore_add(const CommandContext *ctx)
 {
     const char *pkg = NULL;
     const char *const *patterns = NULL;
@@ -320,7 +321,7 @@ static int cmd_ignore_add(const CommandContext *ctx)
     return 0;
 }
 
-static int cmd_ignore_remove(const CommandContext *ctx)
+int cmd_ignore_remove(const CommandContext *ctx)
 {
     const char *pkg = NULL;
     const char *const *patterns = NULL;
@@ -336,7 +337,7 @@ static int cmd_ignore_remove(const CommandContext *ctx)
     return 0;
 }
 
-static int cmd_ignore_clear(const CommandContext *ctx)
+int cmd_ignore_clear(const CommandContext *ctx)
 {
     size_t count = ctx->args->count - ctx->arg_offset;
     const char *const *pkgs =
@@ -345,7 +346,7 @@ static int cmd_ignore_clear(const CommandContext *ctx)
     return 0;
 }
 
-static int cmd_ignore_show(const CommandContext *ctx)
+int cmd_ignore_show(const CommandContext *ctx)
 {
     size_t count = ctx->args->count - ctx->arg_offset;
     const char *const *pkgs =
@@ -354,14 +355,14 @@ static int cmd_ignore_show(const CommandContext *ctx)
     return 0;
 }
 
-static int cmd_config_show(const CommandContext *ctx)
+int cmd_config_show(const CommandContext *ctx)
 {
     (void)ctx;
     config_show();
     return 0;
 }
 
-static int cmd_config_set(const CommandContext *ctx)
+int cmd_config_set(const CommandContext *ctx)
 {
     const char *key = ctx->args->items[ctx->arg_offset];
     const char *val = ctx->args->items[ctx->arg_offset + 1];
@@ -374,157 +375,70 @@ static int cmd_config_set(const CommandContext *ctx)
     return 0;
 }
 
-static int cmd_config_add(const CommandContext *ctx)
+int cmd_config_add(const CommandContext *ctx)
 {
     config_add_dotfiles_dir(ctx->args->items[ctx->arg_offset]);
     return 0;
 }
 
-static int cmd_config_remove(const CommandContext *ctx)
+int cmd_config_remove(const CommandContext *ctx)
 {
     config_remove_dotfiles_dir(ctx->args->items[ctx->arg_offset]);
     return 0;
 }
 
-static int cmd_help(const CommandContext *ctx)
+int cmd_help(const CommandContext *ctx)
 {
     (void)ctx;
     show_help();
     return 0;
 }
 
-static const CommandRoute ROUTE_TABLE[] = {
-    // Core Operations
-    {"stow", NULL, (const char *[]){NULL}, 1, "Usage: stow-manager stow <pkg...>", cmd_stow},
-    {"unstow", NULL, (const char *[]){NULL}, 1, "Usage: stow-manager unstow <pkg...>", cmd_unstow},
-    {"restow", NULL, (const char *[]){NULL}, 1, "Usage: stow-manager restow <pkg...>", cmd_restow},
-    {"all", NULL, (const char *[]){NULL}, 0, NULL, cmd_all},
-    {"diff", NULL, (const char *[]){NULL}, 0, NULL, cmd_diff},
-    {"scan", NULL, (const char *[]){NULL}, 0, NULL, cmd_scan},
-    {"check", NULL, (const char *[]){NULL}, 0, NULL, cmd_check},
-    {"check-symlinks", NULL, (const char *[]){NULL}, 0, NULL, cmd_check_symlinks},
-    {"fix-conflicts", NULL, (const char *[]){"fix", NULL}, 0, NULL, cmd_fix_conflicts},
+static void print_general_help_hint(void)
+{
+    log_info("Hint: Pass -h or help for information.");
+}
 
-    // Package Management
-    {"pkg",
-     "create",
-     (const char *[]){"package:create", "make:pkg", "pkg:create", NULL},
-     1,
-     "Usage: stow-manager pkg create <name>",
-     cmd_pkg_create},
-    {"pkg",
-     "remove",
-     (const char *[]){"package:remove", "pkg:rm", "pkg:remove", NULL},
-     1,
-     "Usage: stow-manager pkg remove <name...>",
-     cmd_pkg_remove},
-    {"pkg",
-     "list",
-     (const char *[]){"package:list", "pkg:show", "pkg:list", "list", NULL},
-     0,
-     NULL,
-     cmd_pkg_list},
+static bool is_known_group(const char *group)
+{
+    if (!group) {
+        return false;
+    }
+    for (size_t i = 0; ROUTE_TABLE[i].handler != NULL; i++) {
+        if (strcmp(group, ROUTE_TABLE[i].group) == 0) {
+            return true;
+        }
+    }
+    return false;
+}
 
-    // Dependency Management
-    {"deps",
-     "add",
-     (const char *[]){"deps:add", NULL},
-     2,
-     "Usage: stow-manager deps add <pkg> <dep> "
-     "[--required|--optional|--conflict]",
-     cmd_deps_add},
-    {"deps",
-     "edit",
-     (const char *[]){"deps:edit", "deps:set", NULL},
-     3,
-     "Usage: stow-manager deps edit <pkg> <dep> <type>",
-     cmd_deps_edit},
-    {"deps",
-     "remove",
-     (const char *[]){"deps:remove", "deps:rm", NULL},
-     2,
-     "Usage: stow-manager deps remove <pkg> <dep>",
-     cmd_deps_remove},
-    {"deps",
-     "show",
-     (const char *[]){"deps:show", "deps:list", NULL},
-     1,
-     "Usage: stow-manager deps show <pkg>",
-     cmd_deps_show},
-    {"deps",
-     "target",
-     (const char *[]){"deps:target", NULL},
-     2,
-     "Usage: stow-manager deps target <pkg> <path>",
-     cmd_deps_target},
-
-    // File Filtering (.stowignore)
-    {"ignore",
-     "init",
-     (const char *[]){"ignore:init", "ignore:create", NULL},
-     0,
-     NULL,
-     cmd_ignore_init},
-    {"ignore",
-     "add",
-     (const char *[]){"ignore:add", NULL},
-     1,
-     "Usage: stow-manager ignore add [pkg] <pattern...>",
-     cmd_ignore_add},
-    {"ignore",
-     "remove",
-     (const char *[]){"ignore:remove", "ignore:rm", "ignore:delete", NULL},
-     1,
-     "Usage: stow-manager ignore remove [pkg] <pattern...>",
-     cmd_ignore_remove},
-    {"ignore",
-     "show",
-     (const char *[]){"ignore:show", "ignore:list", NULL},
-     0,
-     NULL,
-     cmd_ignore_show},
-    {"ignore",
-     "clear",
-     (const char *[]){"ignore:clear", "ignore:purge", NULL},
-     0,
-     NULL,
-     cmd_ignore_clear},
-
-    // Configuration Management
-    {"config",
-     "show",
-     (const char *[]){"config:show", "config:list", "config:get", NULL},
-     0,
-     NULL,
-     cmd_config_show},
-    {"config",
-     "set",
-     (const char *[]){"config:set", "config:target", NULL},
-     2,
-     "Usage: stow-manager config set <target|dotfiles> <path>",
-     cmd_config_set},
-    {"config",
-     "add",
-     (const char *[]){"config:add", NULL},
-     1,
-     "Usage: stow-manager config add <path>",
-     cmd_config_add},
-    {"config",
-     "remove",
-     (const char *[]){"config:remove", "config:rm", NULL},
-     1,
-     "Usage: stow-manager config remove <path>",
-     cmd_config_remove},
-
-    {"help", NULL, (const char *[]){"-h", "--help", NULL}, 0, NULL, cmd_help},
-    {NULL, NULL, NULL, 0, NULL, NULL} // Sentinel
-};
+static void print_group_usage_help(const char *group)
+{
+    log_error("Missing or invalid subcommand for command group '%s'.", group);
+    printf("  %sAvailable subcommands for '%s':%s\n", COLOR_BOLD, group, COLOR_RESET);
+    for (size_t i = 0; ROUTE_TABLE[i].handler != NULL; i++) {
+        if (strcmp(group, ROUTE_TABLE[i].group) == 0 && ROUTE_TABLE[i].subcommand != NULL) {
+            if (ROUTE_TABLE[i].usage) {
+                printf("    %s%s%s\n", COLOR_CYAN, ROUTE_TABLE[i].usage, COLOR_RESET);
+            } else {
+                printf("    %sstow-manager %s %s%s\n",
+                       COLOR_CYAN,
+                       group,
+                       ROUTE_TABLE[i].subcommand,
+                       COLOR_RESET);
+            }
+        }
+    }
+    printf("\n");
+    print_general_help_hint();
+}
 
 int dispatch_command(const StringArray *args, const CliOptions *opts)
 {
     if (!args || args->count == 0) {
-        show_help();
-        return 0;
+        log_error("Invalid arguments.");
+        print_general_help_hint();
+        return 1;
     }
 
     const char *token1 = args->items[0];
@@ -584,6 +498,11 @@ int dispatch_command(const StringArray *args, const CliOptions *opts)
         }
     }
 
+    if (is_known_group(token1)) {
+        print_group_usage_help(token1);
+        return 1;
+    }
+
     char dotfiles_dir[PATH_MAX * 2] = {0};
     char global_target_dir[PATH_MAX * 2] = {0};
     get_active_dotfiles_dir(opts->cli_dotfiles_dir, dotfiles_dir, sizeof(dotfiles_dir));
@@ -609,6 +528,6 @@ int dispatch_command(const StringArray *args, const CliOptions *opts)
     }
 
     log_error("Unknown command: %s", token1);
-    show_help();
+    print_general_help_hint();
     return 1;
 }

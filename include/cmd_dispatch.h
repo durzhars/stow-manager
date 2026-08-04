@@ -39,9 +39,10 @@ typedef int (*CommandHandler)(const CommandContext *ctx);
 typedef struct {
     const char *group;      // e.g. "config", "pkg", "deps", "ignore", "stow"
     const char *subcommand; // e.g. "create", "add", "show" (NULL for top-level)
-    const char **aliases; // NULL-terminated alternative names (e.g. {"package", "make:pkg", NULL})
-    size_t min_args;      // Minimum required positional arguments after group/subcommand
-    const char *usage;    // Usage error string displayed on min_args failure
+    const char *const
+        *aliases;      // NULL-terminated alternative names (e.g. {"package", "make:pkg", NULL})
+    size_t min_args;   // Minimum required positional arguments after group/subcommand
+    const char *usage; // Usage error string displayed on min_args failure
     CommandHandler handler; // Function pointer to execution logic
 } CommandRoute;
 
