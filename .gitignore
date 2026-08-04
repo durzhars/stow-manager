@@ -19,6 +19,7 @@ diffs.txt
 # C Build & Target Directories
 build/
 bin/
+Testing/
 
 .agents/
 skills-lock.json
