@@ -57,21 +57,77 @@ static void build_install_command(const char *dotfiles_dir,
         }
     }
 
+    int res = 0;
     if (strcmp(distro, "arch") == 0 || strcmp(distro, "manjaro") == 0 ||
         strcmp(distro, "endeavouros") == 0) {
-        snprintf(cmd, cmd_size, "sudo pacman -S --needed %s", pkg_list);
+        res = snprintf(cmd, cmd_size, "sudo pacman -S --needed %s", pkg_list);
     } else if (strcmp(distro, "ubuntu") == 0 || strcmp(distro, "debian") == 0 ||
                strcmp(distro, "pop") == 0 || strcmp(distro, "mint") == 0) {
-        snprintf(cmd, cmd_size, "sudo apt update && sudo apt install -y %s", pkg_list);
+        res = snprintf(cmd, cmd_size, "sudo apt update && sudo apt install -y %s", pkg_list);
     } else if (strcmp(distro, "fedora") == 0 || strcmp(distro, "rhel") == 0 ||
                strcmp(distro, "centos") == 0) {
-        snprintf(cmd, cmd_size, "sudo dnf install -y %s", pkg_list);
+        res = snprintf(cmd, cmd_size, "sudo dnf install -y %s", pkg_list);
     } else if (strcmp(distro, "alpine") == 0) {
-        snprintf(cmd, cmd_size, "sudo apk add %s", pkg_list);
+        res = snprintf(cmd, cmd_size, "sudo apk add %s", pkg_list);
     } else if (strcmp(distro, "macos") == 0) {
-        snprintf(cmd, cmd_size, "brew install %s", pkg_list);
+        res = snprintf(cmd, cmd_size, "brew install %s", pkg_list);
     } else {
-        snprintf(cmd, cmd_size, "Install missing packages manually: %s", pkg_list);
+        res = snprintf(cmd, cmd_size, "Install missing packages manually: %s", pkg_list);
+    }
+
+    if (res < 0 || (size_t)res >= cmd_size) {
+        log_error("Install command string truncated or formatting error!");
+        if (cmd_size > 0) {
+            cmd[0] = '\0';
+        }
+    }
+}
+
+static void handle_missing_dependencies(const char *dotfiles_dir,
+                                        const char *distro,
+                                        const StringArray *missing_pkgs,
+                                        bool is_required,
+                                        bool auto_install,
+                                        bool dry_run)
+{
+    if (!missing_pkgs || missing_pkgs->count == 0) {
+        return;
+    }
+
+    if (is_required) {
+        log_error("Missing REQUIRED dependencies!");
+    } else {
+        log_warn("Missing OPTIONAL plugins & tools!");
+    }
+
+    char install_cmd[4096];
+    build_install_command(dotfiles_dir, distro, missing_pkgs, install_cmd, sizeof(install_cmd));
+    printf("%sInstallation Command (%s):%s %s%s%s\n\n",
+           COLOR_BOLD,
+           distro,
+           COLOR_RESET,
+           COLOR_CYAN,
+           install_cmd,
+           COLOR_RESET);
+
+    if (dry_run) {
+        log_info("[DRY-RUN] Would prompt/execute installation command: %s", install_cmd);
+    } else if (auto_install) {
+        run_system_cmd(install_cmd);
+    } else if (isatty(STDIN_FILENO)) {
+        if (is_required) {
+            printf("Would you like to install missing REQUIRED dependencies now? [Y/n] ");
+        } else {
+            printf("Would you like to install missing OPTIONAL plugins & tools now? [y/N] ");
+        }
+        fflush(stdout);
+        int c = getchar();
+        if (c != '\n' && c != EOF) {
+            flush_stdin();
+        }
+        if (c == 'y' || c == 'Y' || (is_required && c == '\n')) {
+            run_system_cmd(install_cmd);
+        }
     }
 }
 
@@ -157,63 +213,8 @@ void check_package_dependencies(const char *dotfiles_dir,
         manifest_free(&manifest);
     }
 
-    if (missing_req.count > 0) {
-        log_error("Missing REQUIRED dependencies!");
-        char install_cmd[4096];
-        build_install_command(dotfiles_dir, distro, &missing_req, install_cmd, sizeof(install_cmd));
-        printf("%sInstallation Command (%s):%s %s%s%s\n\n",
-               COLOR_BOLD,
-               distro,
-               COLOR_RESET,
-               COLOR_CYAN,
-               install_cmd,
-               COLOR_RESET);
-
-        if (dry_run) {
-            log_info("[DRY-RUN] Would prompt/execute installation command: %s", install_cmd);
-        } else if (auto_install) {
-            run_system_cmd(install_cmd);
-        } else if (isatty(STDIN_FILENO)) {
-            printf("Would you like to install missing REQUIRED dependencies now? [Y/n] ");
-            fflush(stdout);
-            int c = getchar();
-            if (c != '\n' && c != EOF) {
-                flush_stdin();
-            }
-            if (c == 'y' || c == 'Y' || c == '\n') {
-                run_system_cmd(install_cmd);
-            }
-        }
-    }
-
-    if (missing_opt.count > 0) {
-        log_warn("Missing OPTIONAL plugins & tools!");
-        char install_cmd[4096];
-        build_install_command(dotfiles_dir, distro, &missing_opt, install_cmd, sizeof(install_cmd));
-        printf("%sInstallation Command (%s):%s %s%s%s\n\n",
-               COLOR_BOLD,
-               distro,
-               COLOR_RESET,
-               COLOR_CYAN,
-               install_cmd,
-               COLOR_RESET);
-
-        if (dry_run) {
-            log_info("[DRY-RUN] Would prompt/execute installation command: %s", install_cmd);
-        } else if (auto_install) {
-            run_system_cmd(install_cmd);
-        } else if (isatty(STDIN_FILENO)) {
-            printf("Would you like to install missing OPTIONAL plugins & tools now? [y/N] ");
-            fflush(stdout);
-            int c = getchar();
-            if (c != '\n' && c != EOF) {
-                flush_stdin();
-            }
-            if (c == 'y' || c == 'Y') {
-                run_system_cmd(install_cmd);
-            }
-        }
-    }
+    handle_missing_dependencies(dotfiles_dir, distro, &missing_req, true, auto_install, dry_run);
+    handle_missing_dependencies(dotfiles_dir, distro, &missing_opt, false, auto_install, dry_run);
 
     if (missing_req.count == 0 && missing_opt.count == 0) {
         log_success("All required dependencies and optional plugins are installed!");

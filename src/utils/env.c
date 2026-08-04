@@ -36,12 +36,12 @@ typedef struct {
     const char *default_rel;
 } XdgMapping;
 
-static bool is_var_start_char(char c)
+static int is_var_start_char(char c)
 {
     return (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c == '_');
 }
 
-static bool is_var_body_char(char c)
+static int is_var_body_char(char c)
 {
     return (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || (c == '_');
 }
@@ -82,13 +82,18 @@ resolve_xdg_path(const char *env_var, const char *default_rel, char *buf, size_t
 
 void expand_env_vars(const char *src, char *out, size_t out_size)
 {
-    if (!src || !out || out_size == 0) {
+    if (!out || out_size == 0) {
+        return;
+    }
+    if (!src) {
+        out[0] = '\0';
         return;
     }
 
     size_t srclen = strlen(src);
     size_t o = 0;
     size_t i = 0;
+    bool overflow = false;
 
     while (i < srclen && o + 1 < out_size) {
         if (src[i] == '$') {
@@ -103,7 +108,11 @@ void expand_env_vars(const char *src, char *out, size_t out_size)
                     const char *val = getenv(varname);
                     if (val) {
                         size_t vlen = strlen(val);
-                        for (size_t k = 0; k < vlen && o + 1 < out_size; k++) {
+                        for (size_t k = 0; k < vlen; k++) {
+                            if (o + 1 >= out_size) {
+                                overflow = true;
+                                break;
+                            }
                             out[o++] = val[k];
                         }
                     }
@@ -121,7 +130,11 @@ void expand_env_vars(const char *src, char *out, size_t out_size)
                 const char *val = getenv(varname);
                 if (val) {
                     size_t vlen = strlen(val);
-                    for (size_t k = 0; k < vlen && o + 1 < out_size; k++) {
+                    for (size_t k = 0; k < vlen; k++) {
+                        if (o + 1 >= out_size) {
+                            overflow = true;
+                            break;
+                        }
                         out[o++] = val[k];
                     }
                 }
@@ -132,7 +145,16 @@ void expand_env_vars(const char *src, char *out, size_t out_size)
         } else {
             out[o++] = src[i++];
         }
+        if (overflow) {
+            break;
+        }
     }
+
+    if (overflow || i < srclen) {
+        out[0] = '\0';
+        return;
+    }
+
     out[o] = '\0';
 }
 
@@ -206,7 +228,7 @@ const char *path_sanity_strerror(PathSanityResult res, const char *path)
     const char *p = (path && *path) ? path : "<empty>";
 
     struct stat st;
-    bool has_stat = (path && stat(path, &st) == 0);
+    int has_stat = (path && stat(path, &st) == 0);
 
     switch (res) {
     case PATH_VALID:
@@ -281,18 +303,19 @@ bool get_xdg_state_home(char *buf, size_t buf_size)
     return get_xdg_dir(XDG_STATE, buf, buf_size);
 }
 
-void get_xdg_data_dirs(StringArray *dirs)
+static void
+get_xdg_colon_separated_dirs(const char *env_var, const char *default_val, StringArray *dirs)
 {
-    const char *env = getenv("XDG_DATA_DIRS");
-    if (!env || strlen(env) == 0) {
-        env = "/usr/local/share:/usr/share";
+    const char *env = getenv(env_var);
+    if (!env || *env == '\0') {
+        env = default_val;
     }
     char *copy = safe_strdup(env);
 
     char *saveptr = NULL;
     char *token = strtok_r(copy, ":", &saveptr);
     while (token) {
-        if (strlen(token) > 0) {
+        if (*token != '\0') {
             char expanded[PATH_MAX * 2];
             expand_env_vars(token, expanded, sizeof(expanded));
             str_array_append(dirs, expanded);
@@ -302,25 +325,14 @@ void get_xdg_data_dirs(StringArray *dirs)
     free(copy);
 }
 
+void get_xdg_data_dirs(StringArray *dirs)
+{
+    get_xdg_colon_separated_dirs("XDG_DATA_DIRS", "/usr/local/share:/usr/share", dirs);
+}
+
 void get_xdg_config_dirs(StringArray *dirs)
 {
-    const char *env = getenv("XDG_CONFIG_DIRS");
-    if (!env || strlen(env) == 0) {
-        env = "/etc/xdg";
-    }
-    char *copy = safe_strdup(env);
-
-    char *saveptr = NULL;
-    char *token = strtok_r(copy, ":", &saveptr);
-    while (token) {
-        if (strlen(token) > 0) {
-            char expanded[PATH_MAX * 2];
-            expand_env_vars(token, expanded, sizeof(expanded));
-            str_array_append(dirs, expanded);
-        }
-        token = strtok_r(NULL, ":", &saveptr);
-    }
-    free(copy);
+    get_xdg_colon_separated_dirs("XDG_CONFIG_DIRS", "/etc/xdg", dirs);
 }
 
 void app_env_init(AppEnvironment *env)
@@ -345,14 +357,12 @@ bool app_env_resolve(AppEnvironment *env, const char *cli_target_override)
     }
     app_env_init(env);
 
-    // Phase 1 & 5: CLI Target Override
     if (cli_target_override && strlen(cli_target_override) > 0) {
         expand_tilde_path(cli_target_override, env->target_dir, sizeof(env->target_dir));
         normalize_path(env->target_dir);
         env->is_target_override = true;
     }
 
-    // Phase 2 & 3: Resolve & Validate Raw $HOME Candidate
     env->is_home_validated = get_user_home_dir(env->home_dir, sizeof(env->home_dir));
 
     if (!env->is_home_validated) {

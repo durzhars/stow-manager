@@ -278,22 +278,17 @@ void config_remove_dotfiles_dir(const char *path)
     Config cfg;
     config_load_active(&cfg);
 
-    StringArray new_dirs;
-    str_array_init(&new_dirs);
-    bool found = false;
-
-    for (size_t i = 0; i < cfg.dotfiles_dirs.count; i++) {
-        if (strcmp(cfg.dotfiles_dirs.items[i], abs_path) == 0) {
-            found = true;
-        } else {
-            str_array_append(&new_dirs, cfg.dotfiles_dirs.items[i]);
+    if (str_array_contains(&cfg.dotfiles_dirs, abs_path)) {
+        size_t w = 0;
+        for (size_t r = 0; r < cfg.dotfiles_dirs.count; r++) {
+            if (strcmp(cfg.dotfiles_dirs.items[r], abs_path) == 0) {
+                free(cfg.dotfiles_dirs.items[r]);
+            } else {
+                cfg.dotfiles_dirs.items[w++] = cfg.dotfiles_dirs.items[r];
+            }
         }
-    }
+        cfg.dotfiles_dirs.count = w;
 
-    str_array_free(&cfg.dotfiles_dirs);
-    cfg.dotfiles_dirs = new_dirs;
-
-    if (found) {
         if (config_save(&cfg)) {
             log_success("Removed dotfiles directory: %s", abs_path);
         }

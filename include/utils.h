@@ -26,6 +26,11 @@
 #define _DEFAULT_SOURCE
 #endif
 
+#ifndef STR
+#define XSTR(s) #s
+#define STR(s) XSTR(s)
+#endif
+
 #include "logger.h"
 #include <dirent.h>
 #include <fnmatch.h>
@@ -110,6 +115,7 @@ bool app_env_resolve(AppEnvironment *env, const char *cli_target_override);
 
 char *trim_whitespace(char *str);
 bool file_exists(const char *path);
+FILE *open_resource_file(const char *filename);
 bool is_dir(const char *path);
 bool is_symlink(const char *path);
 bool is_executable_in_path(const char *executable);
@@ -119,10 +125,10 @@ bool is_symlink_pointing_to(const char *symlink_path,
                             const char *real_pkg_file_path);
 void get_distro_id(char *buf, size_t buf_size);
 void normalize_path(char *path);
-void collapse_path(char *path);
-void join_path(char *out, size_t out_size, const char *dir, const char *rel);
+int collapse_path(char *path);
+int join_path(char *out, size_t out_size, const char *dir, const char *rel);
 int mkdir_p(const char *path, mode_t mode);
-bool is_path_prefix(const char *path, const char *prefix);
+int is_path_prefix(const char *path, const char *prefix);
 void escape_shell_arg(const char *src, char *dest, size_t dest_size);
 void expand_env_vars(const char *src, char *out, size_t out_size);
 void expand_tilde_path(const char *path, char *out, size_t out_size);

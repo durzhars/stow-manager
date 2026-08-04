@@ -150,23 +150,47 @@ char *trim_whitespace(char *str)
 
 void escape_shell_arg(const char *src, char *dest, size_t dest_size)
 {
-    if (!src || !dest || dest_size == 0) {
+    if (!dest || dest_size == 0) {
         return;
     }
+    if (!src) {
+        dest[0] = '\0';
+        return;
+    }
+
     size_t d = 0;
+    if (d + 1 >= dest_size) {
+        dest[0] = '\0';
+        return;
+    }
     dest[d++] = '\'';
-    for (size_t i = 0; src[i] != '\0' && d + 4 < dest_size; i++) {
+
+    size_t i = 0;
+    bool overflow = false;
+    for (i = 0; src[i] != '\0'; i++) {
         if (src[i] == '\'') {
+            if (d + 4 >= dest_size) {
+                overflow = true;
+                break;
+            }
             dest[d++] = '\'';
             dest[d++] = '\\';
             dest[d++] = '\'';
             dest[d++] = '\'';
         } else {
+            if (d + 1 >= dest_size) {
+                overflow = true;
+                break;
+            }
             dest[d++] = src[i];
         }
     }
-    if (d < dest_size) {
-        dest[d++] = '\'';
+
+    if (overflow || src[i] != '\0' || d + 1 >= dest_size) {
+        dest[0] = '\0';
+        return;
     }
-    dest[d < dest_size ? d : dest_size - 1] = '\0';
+
+    dest[d++] = '\'';
+    dest[d] = '\0';
 }

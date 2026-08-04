@@ -66,10 +66,10 @@ static bool contains_word_token(const char *line, const char *word)
 
     const char *pos = line;
     while ((pos = strstr(pos, word)) != NULL) {
-        bool left_ok = (pos == line) || (!isalnum((unsigned char)*(pos - 1)) && *(pos - 1) != '_' &&
-                                         *(pos - 1) != '-');
         const char *after = pos + wlen;
-        bool right_ok =
+        int left_ok = (pos == line) || (!isalnum((unsigned char)*(pos - 1)) && *(pos - 1) != '_' &&
+                                        *(pos - 1) != '-');
+        int right_ok =
             (*after == '\0') || (!isalnum((unsigned char)*after) && *after != '_' && *after != '-');
 
         if (left_ok && right_ok) {
@@ -122,37 +122,21 @@ static void process_single_file(const char *filepath,
     fclose(fp);
 }
 
-static void scan_dir_recursive(const char *dotfiles_dir,
-                               const char *dir_path,
-                               const StringArray *candidate_tools,
-                               const char *pkg_name,
-                               StringArray *shebangs,
-                               StringArray *invocations)
+typedef struct {
+    const StringArray *candidate_tools;
+    const char *pkg_name;
+    StringArray *shebangs;
+    StringArray *invocations;
+} ScanFileState;
+
+static void scan_file_cb(const char *file_path, const char *rel_path, void *user_data)
 {
-    DIR *dir = opendir(dir_path);
-    if (!dir) {
-        return;
+    (void)rel_path;
+    if (file_exists(file_path) && !is_symlink(file_path)) {
+        ScanFileState *st = (ScanFileState *)user_data;
+        process_single_file(
+            file_path, st->candidate_tools, st->pkg_name, st->shebangs, st->invocations);
     }
-
-    struct dirent *entry;
-    char path[PATH_MAX * 2];
-
-    while ((entry = readdir(dir)) != NULL) {
-        if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0) {
-            continue;
-        }
-
-        join_path(path, sizeof(path), dir_path, entry->d_name);
-
-        if (is_dir(path)) {
-            scan_dir_recursive(
-                dotfiles_dir, path, candidate_tools, pkg_name, shebangs, invocations);
-        } else if (file_exists(path) && !is_symlink(path)) {
-            process_single_file(path, candidate_tools, pkg_name, shebangs, invocations);
-        }
-    }
-
-    closedir(dir);
 }
 
 void scan_package(const char *dotfiles_dir, const char *pkg_name)
@@ -179,8 +163,8 @@ void scan_package(const char *dotfiles_dir, const char *pkg_name)
     str_array_init(&shebangs);
     str_array_init(&invocations);
 
-    // Also scan root directory scripts/files inside dotfiles repository if pkg_name is matched
-    scan_dir_recursive(dotfiles_dir, pkg_dir, &candidate_tools, pkg_name, &shebangs, &invocations);
+    ScanFileState state = {&candidate_tools, pkg_name, &shebangs, &invocations};
+    walk_dir_files(pkg_dir, "", scan_file_cb, &state);
 
     // If package name itself is a system tool (e.g. hyprland, zsh, tmux), ensure it is in required
     // shebangs

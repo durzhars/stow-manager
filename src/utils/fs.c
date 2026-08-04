@@ -37,6 +37,63 @@ bool file_exists(const char *path)
     return (lstat(path, &st) == 0);
 }
 
+FILE *open_resource_file(const char *filename)
+{
+    if (!filename || *filename == '\0') {
+        return NULL;
+    }
+
+    StringArray search_paths;
+    str_array_init(&search_paths);
+
+    char data_home[PATH_MAX];
+    if (get_xdg_data_home(data_home, sizeof(data_home))) {
+        char p[PATH_MAX * 2];
+        snprintf(p, sizeof(p), "%s/stow-manager/%s", data_home, filename);
+        str_array_append(&search_paths, p);
+    }
+
+    char config_home[PATH_MAX];
+    if (get_xdg_config_home(config_home, sizeof(config_home))) {
+        char p[PATH_MAX * 2];
+        snprintf(p, sizeof(p), "%s/stow-manager/%s", config_home, filename);
+        str_array_append(&search_paths, p);
+    }
+
+    StringArray data_dirs;
+    str_array_init(&data_dirs);
+    get_xdg_data_dirs(&data_dirs);
+    for (size_t i = 0; i < data_dirs.count; i++) {
+        char p[PATH_MAX * 2];
+        snprintf(p, sizeof(p), "%s/stow-manager/%s", data_dirs.items[i], filename);
+        str_array_append(&search_paths, p);
+    }
+    str_array_free(&data_dirs);
+
+#ifdef DATADIR
+    char p3[PATH_MAX * 2];
+    snprintf(p3, sizeof(p3), "%s/stow-manager/%s", STR(DATADIR), filename);
+    str_array_append(&search_paths, p3);
+#endif
+
+    char p_res[PATH_MAX * 2];
+    snprintf(p_res, sizeof(p_res), "resources/%s", filename);
+    str_array_append(&search_paths, p_res);
+
+    FILE *fp = NULL;
+    for (size_t i = 0; i < search_paths.count; i++) {
+        if (file_exists(search_paths.items[i])) {
+            fp = fopen(search_paths.items[i], "r");
+            if (fp) {
+                break;
+            }
+        }
+    }
+
+    str_array_free(&search_paths);
+    return fp;
+}
+
 bool is_dir(const char *path)
 {
     struct stat st;
@@ -68,16 +125,26 @@ char *read_symlink_target(const char *path)
     }
     target[len] = '\0';
 
-    char abs_target[PATH_MAX * 2];
+    // 2 bytes of extra room for '/' and '\0'
+    char abs_target[PATH_MAX * 2 + 2];
     const char *query_path = target;
 
     if (target[0] != '/') {
         const char *last_slash = strrchr(path, '/');
+        int formatted_len = 0;
         if (last_slash) {
             size_t parent_len = (size_t)(last_slash - path);
-            snprintf(abs_target, sizeof(abs_target), "%.*s/%s", (int)parent_len, path, target);
+            if (parent_len >= PATH_MAX) {
+                return NULL;
+            }
+            formatted_len =
+                snprintf(abs_target, sizeof(abs_target), "%.*s/%s", (int)parent_len, path, target);
         } else {
-            snprintf(abs_target, sizeof(abs_target), "./%s", target);
+            formatted_len = snprintf(abs_target, sizeof(abs_target), "./%s", target);
+        }
+
+        if (formatted_len < 0 || (size_t)formatted_len >= sizeof(abs_target)) {
+            return NULL;
         }
         query_path = abs_target;
     }
@@ -88,10 +155,31 @@ char *read_symlink_target(const char *path)
         return real_res;
     }
 
-    // Fallback for broken symlinks
-    snprintf(abs_target, sizeof(abs_target), "%s", query_path);
-    normalize_path(abs_target);
-    return safe_strdup(abs_target);
+    // Fallback for non-existent targets: try resolving parent directory if possible
+    char norm_path[PATH_MAX * 2];
+    int norm_ret = snprintf(norm_path, sizeof(norm_path), "%s", query_path);
+    if (norm_ret < 0 || (size_t)norm_ret >= sizeof(norm_path)) {
+        return NULL;
+    }
+    collapse_path(norm_path);
+
+    char *last_slash = strrchr(norm_path, '/');
+    if (last_slash && last_slash != norm_path) {
+        *last_slash = '\0';
+        char *parent_real = realpath(norm_path, NULL);
+        if (parent_real) {
+            char full_buf[PATH_MAX * 2];
+            int ret = snprintf(full_buf, sizeof(full_buf), "%s/%s", parent_real, last_slash + 1);
+            free(parent_real);
+            if (ret < 0 || (size_t)ret >= sizeof(full_buf)) {
+                return NULL;
+            }
+            return safe_strdup(full_buf);
+        }
+        *last_slash = '/';
+    }
+
+    return safe_strdup(norm_path);
 }
 
 bool is_symlink_pointing_to(const char *symlink_path,

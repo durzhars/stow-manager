@@ -191,6 +191,23 @@ void manifest_set_target(const char *dotfiles_dir, const char *pkg_name, const c
     manifest_free(&manifest);
 }
 
+typedef enum { DEP_TYPE_REQUIRED, DEP_TYPE_CONFLICT, DEP_TYPE_OPTIONAL } DepType;
+
+static DepType parse_dep_type(const char *type)
+{
+    if (type) {
+        if (strcmp(type, "--required") == 0 || strcmp(type, "-r") == 0 ||
+            strcmp(type, "required") == 0) {
+            return DEP_TYPE_REQUIRED;
+        }
+        if (strcmp(type, "--conflict") == 0 || strcmp(type, "-c") == 0 ||
+            strcmp(type, "conflict") == 0) {
+            return DEP_TYPE_CONFLICT;
+        }
+    }
+    return DEP_TYPE_OPTIONAL;
+}
+
 void manifest_add_dep(const char *dotfiles_dir,
                       const char *pkg_name,
                       const char *dep,
@@ -200,14 +217,13 @@ void manifest_add_dep(const char *dotfiles_dir,
     manifest_init(&manifest, pkg_name);
     manifest_load(&manifest, dotfiles_dir);
 
-    if (type && (strcmp(type, "--required") == 0 || strcmp(type, "-r") == 0 ||
-                 strcmp(type, "required") == 0)) {
+    DepType dt = parse_dep_type(type);
+    if (dt == DEP_TYPE_REQUIRED) {
         if (!str_array_contains(&manifest.required, dep)) {
             str_array_append(&manifest.required, dep);
             log_success("Added '%s' as REQUIRED dependency for package '%s'.", dep, pkg_name);
         }
-    } else if (type && (strcmp(type, "--conflict") == 0 || strcmp(type, "-c") == 0 ||
-                        strcmp(type, "conflict") == 0)) {
+    } else if (dt == DEP_TYPE_CONFLICT) {
         if (!str_array_contains(&manifest.conflicts, dep)) {
             str_array_append(&manifest.conflicts, dep);
             log_success("Added '%s' as CONFLICT entry for package '%s'.", dep, pkg_name);
@@ -223,38 +239,24 @@ void manifest_add_dep(const char *dotfiles_dir,
     manifest_free(&manifest);
 }
 
+static void str_array_filter_out(StringArray *arr, const char *target)
+{
+    size_t w = 0;
+    for (size_t r = 0; r < arr->count; r++) {
+        if (strcmp(arr->items[r], target) == 0) {
+            free(arr->items[r]);
+        } else {
+            arr->items[w++] = arr->items[r];
+        }
+    }
+    arr->count = w;
+}
+
 static void manifest_remove_dep_from_all(PackageManifest *manifest, const char *dep)
 {
-    StringArray new_req;
-    StringArray new_opt;
-    StringArray new_cnf;
-    str_array_init(&new_req);
-    str_array_init(&new_opt);
-    str_array_init(&new_cnf);
-
-    for (size_t i = 0; i < manifest->required.count; i++) {
-        if (strcmp(manifest->required.items[i], dep) != 0) {
-            str_array_append(&new_req, manifest->required.items[i]);
-        }
-    }
-    for (size_t i = 0; i < manifest->optional.count; i++) {
-        if (strcmp(manifest->optional.items[i], dep) != 0) {
-            str_array_append(&new_opt, manifest->optional.items[i]);
-        }
-    }
-    for (size_t i = 0; i < manifest->conflicts.count; i++) {
-        if (strcmp(manifest->conflicts.items[i], dep) != 0) {
-            str_array_append(&new_cnf, manifest->conflicts.items[i]);
-        }
-    }
-
-    str_array_free(&manifest->required);
-    str_array_free(&manifest->optional);
-    str_array_free(&manifest->conflicts);
-
-    manifest->required = new_req;
-    manifest->optional = new_opt;
-    manifest->conflicts = new_cnf;
+    str_array_filter_out(&manifest->required, dep);
+    str_array_filter_out(&manifest->optional, dep);
+    str_array_filter_out(&manifest->conflicts, dep);
 }
 
 void manifest_edit_dep(const char *dotfiles_dir,
@@ -268,12 +270,11 @@ void manifest_edit_dep(const char *dotfiles_dir,
 
     manifest_remove_dep_from_all(&manifest, dep);
 
-    if (new_type && (strcmp(new_type, "--required") == 0 || strcmp(new_type, "-r") == 0 ||
-                     strcmp(new_type, "required") == 0)) {
+    DepType dt = parse_dep_type(new_type);
+    if (dt == DEP_TYPE_REQUIRED) {
         str_array_append(&manifest.required, dep);
         log_success("Updated '%s' to REQUIRED for package '%s'.", dep, pkg_name);
-    } else if (new_type && (strcmp(new_type, "--conflict") == 0 || strcmp(new_type, "-c") == 0 ||
-                            strcmp(new_type, "conflict") == 0)) {
+    } else if (dt == DEP_TYPE_CONFLICT) {
         str_array_append(&manifest.conflicts, dep);
         log_success("Updated '%s' to CONFLICT for package '%s'.", dep, pkg_name);
     } else {

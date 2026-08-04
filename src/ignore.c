@@ -38,8 +38,116 @@ get_stowignore_path(const char *dotfiles_dir, const char *pkg_name, char *out_pa
     }
 }
 
+static void print_ignore_file_lines(const char *path, const StringArray *global_patterns)
+{
+    FILE *fp = fopen(path, "r");
+    if (!fp) {
+        return;
+    }
+
+    char line[512];
+    while (fgets(line, sizeof(line), fp)) {
+        size_t len = strlen(line);
+        while (len > 0 && (line[len - 1] == '\n' || line[len - 1] == '\r')) {
+            line[--len] = '\0';
+        }
+
+        char *trimmed = trim_whitespace(line);
+
+        /* Strip inline or full-line comments */
+        char *hash = strchr(trimmed, '#');
+        if (hash) {
+            *hash = '\0';
+            trimmed = trim_whitespace(trimmed);
+        }
+
+        /* Skip blank lines / comment-only lines */
+        if (*trimmed == '\0') {
+            continue;
+        }
+
+        bool is_redundant = (bool)(global_patterns && str_array_contains(global_patterns, trimmed));
+
+        if (is_redundant) {
+            printf("  %s (redundant: covered by global)%s\n", trimmed, COLOR_RESET);
+        } else {
+            printf("  %s\n", trimmed);
+        }
+    }
+    fclose(fp);
+}
+
 /* =========================================================================
- * Single Target Operations
+ * Show Subsystem Operations
+ * =========================================================================
+ */
+
+static void ignore_show_global(const char *dotfiles_dir)
+{
+    char global_path[PATH_MAX];
+    get_stowignore_path(dotfiles_dir, NULL, global_path, sizeof(global_path));
+
+    if (!file_exists(global_path)) {
+        log_warn("No global '.stowignore' file found at repository root.");
+        return;
+    }
+
+    printf("\n%s%s=== Global Ignore Rules [.stowignore] ===%s\n\n",
+           COLOR_CYAN,
+           COLOR_BOLD,
+           COLOR_RESET);
+    print_ignore_file_lines(global_path, NULL);
+    printf("\n");
+}
+
+static void ignore_show_package(const char *dotfiles_dir, const char *pkg_name)
+{
+    char pkg_path[PATH_MAX];
+    get_stowignore_path(dotfiles_dir, pkg_name, pkg_path, sizeof(pkg_path));
+
+    if (!file_exists(pkg_path)) {
+        log_warn("No '.stowignore' file found for package '%s'.", pkg_name);
+        return;
+    }
+
+    printf("\n%s%s=== Ignore Rules [.stowignore] for Package '%s' ===%s\n\n",
+           COLOR_CYAN,
+           COLOR_BOLD,
+           pkg_name,
+           COLOR_RESET);
+
+    /* Load raw global ignore patterns to mark redundant declarations */
+    StringArray global_patterns;
+    str_array_init(&global_patterns);
+    parse_stowignore_raw(dotfiles_dir, &global_patterns);
+
+    print_ignore_file_lines(pkg_path, &global_patterns);
+    printf("\n");
+
+    str_array_free(&global_patterns);
+}
+
+static void ignore_show_all(const char *dotfiles_dir)
+{
+    ignore_show_global(dotfiles_dir);
+
+    StringArray packages;
+    str_array_init(&packages);
+    get_all_packages(dotfiles_dir, &packages);
+
+    for (size_t i = 0; i < packages.count; i++) {
+        char pkg_path[PATH_MAX];
+        get_stowignore_path(dotfiles_dir, packages.items[i], pkg_path, sizeof(pkg_path));
+        if (file_exists(pkg_path)) {
+            ignore_show_package(dotfiles_dir, packages.items[i]);
+        }
+    }
+
+    str_array_free(&packages);
+}
+
+/* =========================================================================
+ * Single Target Init / Clear
  * ========================================================================= */
 
 static void ignore_init_single(const char *dotfiles_dir, const char *pkg_name)
@@ -68,17 +176,26 @@ static void ignore_init_single(const char *dotfiles_dir, const char *pkg_name)
         fprintf(fp, "# Global .stowignore for dotfiles repository\n");
     }
 
-    fprintf(fp,
-            "# Syntax matches standard glob/gitignore pattern rules\n\n"
-            "# Build & Runtime Cache Artifacts\n"
-            "*.zwc\n"
-            "*.pyc\n"
-            "*.stow_backup_*\n\n"
-            "# OS & Editor Metadata\n"
-            ".DS_Store\n"
-            "Thumbs.db\n"
-            ".idea/\n"
-            ".vscode/\n");
+    FILE *tmpl = open_resource_file("stowignore.template");
+    if (tmpl) {
+        char line[512];
+        while (fgets(line, sizeof(line), tmpl)) {
+            fputs(line, fp);
+        }
+        fclose(tmpl);
+    } else {
+        fprintf(fp,
+                "# Syntax matches standard glob/gitignore pattern rules\n\n"
+                "# Build & Runtime Cache Artifacts\n"
+                "*.zwc\n"
+                "*.pyc\n"
+                "*.stow_backup_*\n\n"
+                "# OS & Editor Metadata\n"
+                ".DS_Store\n"
+                "Thumbs.db\n"
+                ".idea/\n"
+                ".vscode/\n");
+    }
 
     fclose(fp);
 
@@ -114,38 +231,6 @@ static void ignore_clear_single(const char *dotfiles_dir, const char *pkg_name)
     }
 }
 
-static void ignore_show_single(const char *dotfiles_dir, const char *pkg_name)
-{
-    char path[PATH_MAX * 4];
-    get_stowignore_path(dotfiles_dir, pkg_name, path, sizeof(path));
-
-    if (!file_exists(path)) {
-        if (pkg_name && *pkg_name != '\0') {
-            log_warn("No '.stowignore' file found for package '%s'.", pkg_name);
-        } else {
-            log_warn("No global '.stowignore' file found at repository root.");
-        }
-        return;
-    }
-
-    const char *label = (pkg_name && *pkg_name != '\0') ? pkg_name : "GLOBAL";
-    printf("\n%s%s=== Ignore Rules [.stowignore] for '%s' ===%s\n\n",
-           COLOR_CYAN,
-           COLOR_BOLD,
-           label,
-           COLOR_RESET);
-
-    FILE *fp = fopen(path, "r");
-    if (fp) {
-        char line[512];
-        while (fgets(line, sizeof(line), fp)) {
-            fputs(line, stdout);
-        }
-        fclose(fp);
-    }
-    printf("\n");
-}
-
 /* =========================================================================
  * Batch Entrypoints (Zero Allocation Slices)
  * ========================================================================= */
@@ -175,11 +260,16 @@ void ignore_clear(const char *dotfiles_dir, const char *const *pkgs, size_t coun
 void ignore_show(const char *dotfiles_dir, const char *const *pkgs, size_t count)
 {
     if (!pkgs || count == 0) {
-        ignore_show_single(dotfiles_dir, NULL);
+        ignore_show_all(dotfiles_dir);
         return;
     }
+
     for (size_t i = 0; i < count; i++) {
-        ignore_show_single(dotfiles_dir, pkgs[i]);
+        if (strcmp(pkgs[i], "all") == 0 || strcmp(pkgs[i], "--all") == 0) {
+            ignore_show_all(dotfiles_dir);
+        } else {
+            ignore_show_package(dotfiles_dir, pkgs[i]);
+        }
     }
 }
 
@@ -193,7 +283,15 @@ void ignore_add_patterns(const char *dotfiles_dir,
         return;
     }
 
-    char path[PATH_MAX * 4];
+    int is_package = (pkg_name && *pkg_name != '\0');
+
+    StringArray global_patterns;
+    str_array_init(&global_patterns);
+    if (is_package) {
+        parse_stowignore_raw(dotfiles_dir, &global_patterns);
+    }
+
+    char path[PATH_MAX];
     get_stowignore_path(dotfiles_dir, pkg_name, path, sizeof(path));
 
     if (!file_exists(path)) {
@@ -219,13 +317,22 @@ void ignore_add_patterns(const char *dotfiles_dir,
     if (!afp) {
         log_error("Failed to open '.stowignore' for writing: %s", path);
         str_array_free(&existing);
+        str_array_free(&global_patterns);
         return;
     }
 
     for (size_t i = 0; i < count; i++) {
         const char *pat = patterns[i];
-        if (!pat || *pat == '\0')
+        if (!pat || *pat == '\0') {
             continue;
+        }
+
+        if (is_package && str_array_contains(&global_patterns, pat)) {
+            log_warn("Pattern '%s' is already in global '.stowignore' (skipping "
+                     "duplicate).",
+                     pat);
+            continue;
+        }
 
         if (str_array_contains(&existing, pat)) {
             log_warn("Pattern '%s' already exists in '.stowignore' (skipping "
@@ -237,7 +344,7 @@ void ignore_add_patterns(const char *dotfiles_dir,
         fprintf(afp, "%s\n", pat);
         str_array_append(&existing, pat);
 
-        if (pkg_name && *pkg_name != '\0') {
+        if (is_package) {
             log_success("Added pattern '%s' to '.stowignore' for package '%s'.", pat, pkg_name);
         } else {
             log_success("Added pattern '%s' to global '.stowignore'.", pat);
@@ -246,6 +353,7 @@ void ignore_add_patterns(const char *dotfiles_dir,
 
     fclose(afp);
     str_array_free(&existing);
+    str_array_free(&global_patterns);
 }
 
 void ignore_remove_patterns(const char *dotfiles_dir,
@@ -299,7 +407,7 @@ void ignore_remove_patterns(const char *dotfiles_dir,
         str_array_init(&filtered);
 
         for (size_t l = 0; l < lines.count; l++) {
-            char *trimmed = trim_whitespace((char *)lines.items[l]);
+            char *trimmed = trim_whitespace(lines.items[l]);
             if (strcmp(trimmed, pat) == 0) {
                 found = true;
                 file_modified = true;

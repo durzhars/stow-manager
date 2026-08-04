@@ -23,49 +23,22 @@
 
 static FILE *open_registry_file(const char *dotfiles_dir)
 {
-    char path[PATH_MAX * 2];
-    snprintf(path, sizeof(path), "%s/stow.registry", dotfiles_dir);
-    FILE *fp = fopen(path, "r");
-    if (fp) {
-        return fp;
-    }
+    if (dotfiles_dir && *dotfiles_dir != '\0') {
+        char path[PATH_MAX * 2];
+        snprintf(path, sizeof(path), "%s/stow.registry", dotfiles_dir);
+        FILE *fp = fopen(path, "r");
+        if (fp) {
+            return fp;
+        }
 
-    snprintf(path, sizeof(path), "%s/.stowregistry", dotfiles_dir);
-    fp = fopen(path, "r");
-    if (fp) {
-        return fp;
-    }
-
-    char data_home[PATH_MAX];
-    get_xdg_data_home(data_home, sizeof(data_home));
-    snprintf(path, sizeof(path), "%s/stow-manager/stow.registry", data_home);
-    fp = fopen(path, "r");
-    if (fp) {
-        return fp;
-    }
-
-    char config_home[PATH_MAX];
-    get_xdg_config_home(config_home, sizeof(config_home));
-    snprintf(path, sizeof(path), "%s/stow-manager/stow.registry", config_home);
-    fp = fopen(path, "r");
-    if (fp) {
-        return fp;
-    }
-
-    StringArray data_dirs;
-    str_array_init(&data_dirs);
-    get_xdg_data_dirs(&data_dirs);
-    for (size_t i = 0; i < data_dirs.count; i++) {
-        snprintf(path, sizeof(path), "%s/stow-manager/stow.registry", data_dirs.items[i]);
+        snprintf(path, sizeof(path), "%s/.stowregistry", dotfiles_dir);
         fp = fopen(path, "r");
         if (fp) {
-            str_array_free(&data_dirs);
             return fp;
         }
     }
-    str_array_free(&data_dirs);
 
-    return NULL;
+    return open_resource_file("stow.registry");
 }
 
 void registry_get_aliases(const char *dotfiles_dir, const char *tool, StringArray *aliases)

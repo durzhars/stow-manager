@@ -19,8 +19,11 @@
 #define _GNU_SOURCE
 #define _DEFAULT_SOURCE
 #define _POSIX_C_SOURCE 200809L
-#define MAX_PATH_DEPTH (PATH_MAX / 2)
 
+#define MAX_PATH_DEPTH 256
+
+#include <asm-generic/errno.h>
+#include <errno.h>
 #include <limits.h>
 #include <stddef.h>
 #include <stdio.h>
@@ -53,18 +56,18 @@ void normalize_path(char *path)
     }
 }
 
-void collapse_path(char *path)
+int collapse_path(char *path)
 {
     if (!path || !*path) {
-        return;
+        return 1;
     }
 
-    bool is_abs = (path[0] == '/');
+    int is_abs = (path[0] == '/');
     char *r = path + (is_abs ? 1 : 0);
     char *w = path + (is_abs ? 1 : 0);
 
     // Stack of component write-offsets
-    size_t stack[PATH_MAX / 2];
+    size_t stack[MAX_PATH_DEPTH];
     size_t depth = 0;
 
     // Sorcery below. Don't touch
@@ -81,34 +84,44 @@ void collapse_path(char *path)
         }
         size_t len = (size_t)(r - start);
         if (len == 1 && start[0] == '.') {
-            // Do nothing. No Sorcery here. Bohoo.
+            // Do nothing. No Sorcery here.
             continue;
         }
         if (len == 2 && start[0] == '.' && start[1] == '.') {
             if (depth > 0) {
                 size_t prev = stack[depth - 1];
-                if (!is_abs && (size_t)(w - (size_t)path - prev) == 2 && path[prev] == '.' &&
-                    path[prev + 1] == '.') {
-                    depth++;
+                size_t offset = (size_t)(w - path);
+                if (!is_abs && (offset - prev) == 2 && path[prev] == '.' && path[prev + 1] == '.') {
                     if (w > path && *(w - 1) != '/') {
                         *w++ = '/';
                     }
-                    if (depth < MAX_PATH_DEPTH) {
-                        stack[depth++] = (size_t)(w - path);
+                    if (depth >= MAX_PATH_DEPTH) {
+                        errno = ENAMETOOLONG;
+                        path[0] = '\0';
+                        return -1;
                     }
+                    stack[depth++] = (size_t)(w - path);
                     *w++ = '.';
                     *w++ = '.';
                 } else {
                     depth--;
-                    w = path + stack[depth];
+                    w = path + (depth > 0 ? stack[depth] : (is_abs ? 1 : 0));
+                    if (!is_abs && depth > 0) {
+                        while (w > path && *(w - 1) != '/') {
+                            w--;
+                        }
+                    }
                 }
             } else if (!is_abs) {
                 if (w > path && *(w - 1) != '/') {
                     *w++ = '/';
                 }
-                if (depth < MAX_PATH_DEPTH) {
-                    stack[depth++] = (size_t)(w - path);
+                if (depth >= MAX_PATH_DEPTH) {
+                    errno = ENAMETOOLONG;
+                    path[0] = '\0';
+                    return -1;
                 }
+                stack[depth++] = (size_t)(w - path);
                 *w++ = '.';
                 *w++ = '.';
             }
@@ -116,9 +129,12 @@ void collapse_path(char *path)
             if (w > path && *(w - 1) != '/') {
                 *w++ = '/';
             }
-            if (depth < MAX_PATH_DEPTH) {
-                stack[depth++] = (size_t)(w - path);
+            if (depth >= MAX_PATH_DEPTH) {
+                errno = ENAMETOOLONG;
+                path[0] = '\0';
+                return -1;
             }
+            stack[depth++] = (size_t)(w - path);
             for (size_t i = 0; i < len; i++) {
                 *w++ = start[i];
             }
@@ -128,46 +144,77 @@ void collapse_path(char *path)
         *w++ = is_abs ? '/' : '.';
     }
     *w = '\0';
+    return 0;
 }
 
-void join_path(char *out, size_t out_size, const char *dir, const char *rel)
+int join_path(char *out, size_t out_size, const char *dir, const char *rel)
 {
     if (!out || out_size == 0) {
-        return;
+        errno = EINVAL;
+        return -1;
     }
-    if (!dir || *dir == '\0') {
-        size_t rlen = rel ? strlen(rel) : 0;
-        size_t copy_len = rlen < out_size - 1 ? rlen : out_size - 1;
-        if (rel && copy_len > 0) {
-            memcpy(out, rel, copy_len);
-        }
-        out[copy_len] = '\0';
-    } else if (!rel || *rel == '\0') {
-        size_t dlen = strlen(dir);
-        size_t copy_len = dlen < out_size - 1 ? dlen : out_size - 1;
-        memcpy(out, dir, copy_len);
-        out[copy_len] = '\0';
+
+    const char *d = dir ? dir : "";
+    const char *r = rel ? rel : "";
+
+    size_t dlen = strlen(d);
+    size_t rlen = strlen(r);
+
+    if (dlen == 0 && rlen == 0) {
+        out[0] = '\0';
+        return 0;
+    }
+
+    size_t needed;
+    int has_slash = 0;
+    if (dlen == 0) {
+        needed = rlen;
+    } else if (rlen == 0) {
+        needed = dlen;
     } else {
-        size_t dlen = strlen(dir);
-        size_t rlen = strlen(rel);
-        bool has_slash = (dir[dlen - 1] == '/');
-        size_t needed = dlen + (has_slash ? 0 : 1) + rlen;
-        if (needed < out_size) {
-            memcpy(out, dir, dlen);
-            if (!has_slash) {
-                out[dlen] = '/';
-                memcpy(out + dlen + 1, rel, rlen + 1);
-            } else {
-                memcpy(out + dlen, rel, rlen + 1);
-            }
+        has_slash = (d[dlen - 1] == '/');
+        needed = dlen + (has_slash ? 0 : 1) + rlen;
+    }
+
+    if (needed >= out_size) {
+        out[0] = '\0';
+        errno = ENAMETOOLONG;
+        return -1;
+    }
+
+    // Assemble into temporary buffer to safely support overlapping buffers (out == dir or out ==
+    // rel)
+    char tmp[PATH_MAX];
+    char *buf = tmp;
+    if (needed >= sizeof(tmp)) {
+        buf = (char *)safe_malloc(needed + 1);
+    }
+
+    if (dlen == 0) {
+        memcpy(buf, r, rlen + 1);
+    } else if (rlen == 0) {
+        memcpy(buf, d, dlen + 1);
+    } else {
+        memcpy(buf, d, dlen);
+        if (!has_slash) {
+            buf[dlen] = '/';
+            memcpy(buf + dlen + 1, r, rlen + 1);
         } else {
-            snprintf(out, out_size, has_slash ? "%s%s" : "%s/%s", dir, rel);
+            memcpy(buf + dlen, r, rlen + 1);
         }
     }
-    normalize_path(out);
+
+    normalize_path(buf);
+    memcpy(out, buf, strlen(buf) + 1);
+
+    if (buf != tmp) {
+        free(buf);
+    }
+
+    return 0;
 }
 
-bool is_path_prefix(const char *path, const char *prefix)
+int is_path_prefix(const char *path, const char *prefix)
 {
     if (!path || !prefix) {
         return false;
@@ -197,36 +244,53 @@ bool is_path_prefix(const char *path, const char *prefix)
 
 void expand_tilde_path(const char *path, char *out, size_t out_size)
 {
-    if (!path || !out || out_size == 0) {
+    if (!out || out_size == 0) {
+        return;
+    }
+    if (!path) {
+        out[0] = '\0';
         return;
     }
     char temp[PATH_MAX];
+    bool expanded = false;
     if (path[0] == '~' && (path[1] == '/' || path[1] == '\0')) {
         char home[PATH_MAX];
         if (get_user_home_dir(home, sizeof(home))) {
-            snprintf(temp, sizeof(temp), "%s%s", home, path + 1);
-        } else {
-            size_t plen = strlen(path);
-            size_t copy_len = plen < sizeof(temp) - 1 ? plen : sizeof(temp) - 1;
-            memcpy(temp, path, copy_len);
-            temp[copy_len] = '\0';
+            int ret = snprintf(temp, sizeof(temp), "%s%s", home, path + 1);
+            if (ret >= 0 && (size_t)ret < sizeof(temp)) {
+                expanded = true;
+            }
         }
-    } else {
-        size_t plen = strlen(path);
-        size_t copy_len = plen < sizeof(temp) - 1 ? plen : sizeof(temp) - 1;
-        memcpy(temp, path, copy_len);
-        temp[copy_len] = '\0';
+    }
+    if (!expanded) {
+        int ret = snprintf(temp, sizeof(temp), "%s", path);
+        if (ret < 0 || (size_t)ret >= sizeof(temp)) {
+            out[0] = '\0';
+            return;
+        }
     }
     expand_env_vars(temp, out, out_size);
 }
 
 void get_dotfiles_dir(char *buf, size_t buf_size)
 {
+    if (!buf || buf_size == 0) {
+        return;
+    }
     char cwd[PATH_MAX];
     if (getcwd(cwd, sizeof(cwd))) {
-        snprintf(buf, buf_size, "%s", cwd);
+        int ret = snprintf(buf, buf_size, "%s", cwd);
+        if (ret < 0 || (size_t)ret >= buf_size) {
+            buf[0] = '\0';
+            return;
+        }
     } else {
-        snprintf(buf, buf_size, ".");
+        if (buf_size > 1) {
+            buf[0] = '.';
+            buf[1] = '\0';
+        } else {
+            buf[0] = '\0';
+        }
     }
 }
 

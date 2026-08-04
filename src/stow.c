@@ -35,6 +35,17 @@ static void get_timestamp_str(char *buf, size_t size)
     }
 }
 
+static void
+init_package_ignores(StringArray *raw_ignores, const char *dotfiles_dir, const char *pkg_dir)
+{
+    str_array_init(raw_ignores);
+    get_default_stowignore(raw_ignores);
+    parse_stowignore_raw(dotfiles_dir, raw_ignores);
+    if (pkg_dir && *pkg_dir != '\0') {
+        parse_stowignore_raw(pkg_dir, raw_ignores);
+    }
+}
+
 // Resolves symlink_path and checks if it points into dotfiles_dir.
 // If so, extracts the owner package name into owner_pkg_buf.
 static bool get_symlink_owner_package(const char *symlink_path,
@@ -410,10 +421,7 @@ void prepare_target_conflicts(const char *target_dir,
     }
 
     StringArray raw_ignores;
-    str_array_init(&raw_ignores);
-    get_default_stowignore(&raw_ignores);
-    parse_stowignore_raw(dotfiles_dir, &raw_ignores);
-    parse_stowignore_raw(pkg_dir, &raw_ignores);
+    init_package_ignores(&raw_ignores, dotfiles_dir, pkg_dir);
 
     ConflictContext ctx = {target_dir,
                            dotfiles_dir,
@@ -494,10 +502,7 @@ get_package_stow_status(const char *target_dir, const char *dotfiles_dir, const 
     }
 
     StringArray raw_ignores;
-    str_array_init(&raw_ignores);
-    get_default_stowignore(&raw_ignores);
-    parse_stowignore_raw(dotfiles_dir, &raw_ignores);
-    parse_stowignore_raw(pkg_dir, &raw_ignores);
+    init_package_ignores(&raw_ignores, dotfiles_dir, pkg_dir);
 
     CheckStowedStatsContext ctx = {target_dir, pkg_dir, real_pkg_dir, &raw_ignores, 0, 0};
     walk_dir_files(pkg_dir, "", check_stowed_stats_cb, &ctx);
@@ -598,10 +603,7 @@ void handle_dynamic_package_conflicts(const char *target_dir,
     }
 
     StringArray raw_ignores;
-    str_array_init(&raw_ignores);
-    get_default_stowignore(&raw_ignores);
-    parse_stowignore_raw(dotfiles_dir, &raw_ignores);
-    parse_stowignore_raw(pkg_dir, &raw_ignores);
+    init_package_ignores(&raw_ignores, dotfiles_dir, pkg_dir);
 
     DetectConflictsContext ctx;
     ctx.target_dir = target_dir;
@@ -671,10 +673,7 @@ int stow_package(const char *dotfiles_dir,
     }
 
     StringArray raw_ignores;
-    str_array_init(&raw_ignores);
-    get_default_stowignore(&raw_ignores);
-    parse_stowignore_raw(dotfiles_dir, &raw_ignores);
-    parse_stowignore_raw(pkg_dir, &raw_ignores);
+    init_package_ignores(&raw_ignores, dotfiles_dir, pkg_dir);
 
     NativeStowContext ctx = {target_dir, pkg_dir, &raw_ignores, 0, 0};
     walk_dir_files(pkg_dir, "", native_stow_cb, &ctx);
@@ -714,10 +713,7 @@ int unstow_package(const char *dotfiles_dir,
     }
 
     StringArray raw_ignores;
-    str_array_init(&raw_ignores);
-    get_default_stowignore(&raw_ignores);
-    parse_stowignore_raw(dotfiles_dir, &raw_ignores);
-    parse_stowignore_raw(pkg_dir, &raw_ignores);
+    init_package_ignores(&raw_ignores, dotfiles_dir, pkg_dir);
 
     NativeUnstowContext ctx = {target_dir, pkg_dir, real_pkg_dir, &raw_ignores, dry_run, 0, 0};
     walk_dir_files(pkg_dir, "", native_unstow_cb, &ctx);
@@ -777,10 +773,7 @@ int restow_package(const char *dotfiles_dir,
     }
 
     StringArray raw_ignores;
-    str_array_init(&raw_ignores);
-    get_default_stowignore(&raw_ignores);
-    parse_stowignore_raw(dotfiles_dir, &raw_ignores);
-    parse_stowignore_raw(pkg_dir, &raw_ignores);
+    init_package_ignores(&raw_ignores, dotfiles_dir, pkg_dir);
 
     NativeStowContext ctx = {target_dir, pkg_dir, &raw_ignores, 0, 0};
     walk_dir_files(pkg_dir, "", native_stow_cb, &ctx);

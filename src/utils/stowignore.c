@@ -24,14 +24,17 @@
 #define STR(s) XSTR(s)
 #endif
 
-#include "utils.h"
 #include <fnmatch.h>
 #include <limits.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
-void parse_stowignore(const char *dir_path, StringArray *ignore_patterns)
+#include "utils.h"
+
+typedef void (*StowignoreLineCallback)(const char *line, void *user_data);
+
+static void read_stowignore_file(const char *dir_path, StowignoreLineCallback cb, void *user_data)
 {
     if (!dir_path) {
         return;
@@ -55,111 +58,66 @@ void parse_stowignore(const char *dir_path, StringArray *ignore_patterns)
             continue;
         }
 
-        char escaped[PATH_MAX * 2];
-        size_t e = 0;
-        for (size_t i = 0; trimmed[i] != '\0' && e + 2 < sizeof(escaped); i++) {
-            if (trimmed[i] == '.') {
-                escaped[e++] = '\\';
-                escaped[e++] = '.';
-            } else if (trimmed[i] == '*') {
-                escaped[e++] = '.';
-                escaped[e++] = '*';
-            } else {
-                escaped[e++] = trimmed[i];
-            }
+        /* Strip inline comment if present */
+        char *hash = strchr(trimmed, '#');
+        if (hash) {
+            *hash = '\0';
+            trimmed = trim_whitespace(trimmed);
         }
-        escaped[e] = '\0';
 
-        if (strlen(escaped) > 0 && !str_array_contains(ignore_patterns, escaped)) {
-            str_array_append(ignore_patterns, escaped);
+        if (trimmed[0] != '\0') {
+            cb(trimmed, user_data);
         }
     }
 
     free(linebuf);
     fclose(fp);
+}
+
+static void stowignore_cb(const char *line, void *user_data)
+{
+    StringArray *ignore_patterns = (StringArray *)user_data;
+    char escaped[PATH_MAX * 2];
+    size_t e = 0;
+    for (size_t i = 0; line[i] != '\0' && e + 2 < sizeof(escaped); i++) {
+        if (line[i] == '.') {
+            escaped[e++] = '\\';
+            escaped[e++] = '.';
+        } else if (line[i] == '*') {
+            escaped[e++] = '.';
+            escaped[e++] = '*';
+        } else {
+            escaped[e++] = line[i];
+        }
+    }
+    escaped[e] = '\0';
+
+    if (e > 0 && !str_array_contains(ignore_patterns, escaped)) {
+        str_array_append(ignore_patterns, escaped);
+    }
+}
+
+void parse_stowignore(const char *dir_path, StringArray *ignore_patterns)
+{
+    read_stowignore_file(dir_path, stowignore_cb, ignore_patterns);
+}
+
+static void raw_stowignore_cb(const char *line, void *user_data)
+{
+    StringArray *raw_ignores = (StringArray *)user_data;
+    if (!str_array_contains(raw_ignores, line)) {
+        str_array_append(raw_ignores, line);
+    }
 }
 
 void parse_stowignore_raw(const char *dir_path, StringArray *raw_ignores)
 {
-    if (!dir_path) {
-        return;
-    }
-    char ignore_file[PATH_MAX * 2];
-    join_path(ignore_file, sizeof(ignore_file), dir_path, ".stowignore");
-
-    FILE *fp = fopen(ignore_file, "r");
-    if (!fp) {
-        return;
-    }
-
-    char *linebuf = NULL;
-    size_t linecap = 0;
-    ssize_t linelen;
-
-    while ((linelen = getline(&linebuf, &linecap, fp)) != -1) {
-        (void)linelen;
-        char *trimmed = trim_whitespace(linebuf);
-        if (trimmed[0] == '#' || trimmed[0] == '\0') {
-            continue;
-        }
-        if (!str_array_contains(raw_ignores, trimmed)) {
-            str_array_append(raw_ignores, trimmed);
-        }
-    }
-
-    free(linebuf);
-    fclose(fp);
+    read_stowignore_file(dir_path, raw_stowignore_cb, raw_ignores);
 }
 
 void get_default_stowignore(StringArray *ignore_patterns)
 {
-    const char *filename = "stowignore.default";
-
-    StringArray search_paths;
-    str_array_init(&search_paths);
-
-    char data_home[PATH_MAX];
-    get_xdg_data_home(data_home, sizeof(data_home));
-    char p1[PATH_MAX * 2];
-    snprintf(p1, sizeof(p1), "%s/stow-manager/%s", data_home, filename);
-    str_array_append(&search_paths, p1);
-
-    char config_home[PATH_MAX];
-    get_xdg_config_home(config_home, sizeof(config_home));
-    char p2[PATH_MAX * 2];
-    snprintf(p2, sizeof(p2), "%s/stow-manager/%s", config_home, filename);
-    str_array_append(&search_paths, p2);
-
-    StringArray data_dirs;
-    str_array_init(&data_dirs);
-    get_xdg_data_dirs(&data_dirs);
-    for (size_t i = 0; i < data_dirs.count; i++) {
-        char path[PATH_MAX * 2];
-        snprintf(path, sizeof(path), "%s/stow-manager/%s", data_dirs.items[i], filename);
-        str_array_append(&search_paths, path);
-    }
-    str_array_free(&data_dirs);
-
-#ifdef DATADIR
-    char p3[PATH_MAX * 2];
-    snprintf(p3, sizeof(p3), "%s/stow-manager/%s", STR(DATADIR), filename);
-    str_array_append(&search_paths, p3);
-#endif
-
-    char p_res[PATH_MAX];
-    snprintf(p_res, sizeof(p_res), "resources/%s", filename);
-    str_array_append(&search_paths, p_res);
-
-    FILE *fp = NULL;
-    for (size_t i = 0; i < search_paths.count; i++) {
-        if (file_exists(search_paths.items[i])) {
-            fp = fopen(search_paths.items[i], "r");
-            if (fp) {
-                break;
-            }
-        }
-    }
-
+    FILE *fp = open_resource_file("stowignore.default");
     if (fp) {
         char *linebuf = NULL;
         size_t linecap = 0;
@@ -190,8 +148,6 @@ void get_default_stowignore(StringArray *ignore_patterns)
             }
         }
     }
-
-    str_array_free(&search_paths);
 }
 
 bool is_path_ignored(const char *rel_path, const StringArray *raw_ignores)
