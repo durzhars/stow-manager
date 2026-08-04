@@ -20,6 +20,7 @@
 #define _DEFAULT_SOURCE
 #define _POSIX_C_SOURCE 200809L
 
+#include "../include/manifest.h"
 #include "../include/scanner.h"
 #include "test_framework.h"
 

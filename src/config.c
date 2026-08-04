@@ -24,6 +24,16 @@
 
 #include "manifest.h"
 
+#include "logger.h"
+#include "utils/defs.h"
+#include "utils/env.h"
+#include "utils/fs.h"
+#include "utils/path.h"
+
+#include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
+
 // Lifecycle Helpers
 void config_init(Config *cfg)
 {

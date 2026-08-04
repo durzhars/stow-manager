@@ -21,7 +21,19 @@
 #define _POSIX_C_SOURCE 200809L
 #include "checker.h"
 #include "registry.h"
+
+#include "logger.h"
+#include "manifest.h"
+#include "utils/defs.h"
+#include "utils/env.h"
+#include "utils/fs.h"
+#include "utils/mem.h"
+#include "utils/path.h"
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 #include <termios.h>
+#include <unistd.h>
 
 static void flush_stdin(void)
 {

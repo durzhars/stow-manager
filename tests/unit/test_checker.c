@@ -21,6 +21,7 @@
 #define _POSIX_C_SOURCE 200809L
 
 #include "../include/checker.h"
+#include "../include/manifest.h"
 #include "test_framework.h"
 
 void test_check_package_dependencies(void)

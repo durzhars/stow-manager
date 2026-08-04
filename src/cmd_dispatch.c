@@ -33,6 +33,11 @@
 #include "scanner.h"
 #include "stow.h"
 
+#include "logger.h"
+#include "utils/defs.h"
+#include "utils/fs.h"
+#include "utils/path.h"
+
 typedef int (*PackageActionFn)(const char *dotfiles_dir,
                                const char *target_dir,
                                const char *pkg_name,

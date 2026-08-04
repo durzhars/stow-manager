@@ -15,22 +15,24 @@
  * You should have received a copy of the GNU General Public License
  * along with this program. If not, see <https://www.gnu.org/licenses/>.
  */
-
 #ifndef UTILS_H
 #define UTILS_H
 
-#ifndef _XOPEN_SOURCE
-#define _XOPEN_SOURCE 700
-#endif
-#ifndef _DEFAULT_SOURCE
-#define _DEFAULT_SOURCE
-#endif
+/*
+ * Umbrella header — includes every utils sub-header for backward
+ * compatibility.  New code should include individual sub-headers
+ * from utils/ for finer-grained dependency control.
+ */
 
-#ifndef STR
-#define XSTR(s) #s
-#define STR(s) XSTR(s)
-#endif
+#include "utils/defs.h"
+#include "utils/env.h"
+#include "utils/fs.h"
+#include "utils/mem.h"
+#include "utils/path.h"
+#include "utils/signal.h"
+#include "utils/stowignore.h"
 
+/* Transitive system headers kept for backward compatibility */
 #include "logger.h"
 #include <dirent.h>
 #include <fnmatch.h>
@@ -44,126 +46,5 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <unistd.h>
-
-#define COLOR_RED "\033[0;31m"
-#define COLOR_GREEN "\033[0;32m"
-#define COLOR_YELLOW "\033[1;33m"
-#define COLOR_BLUE "\033[0;34m"
-#define COLOR_CYAN "\033[0;36m"
-#define COLOR_WHITE "\033[1;37m"
-#define COLOR_BOLD "\033[1m"
-#define COLOR_RESET "\033[0m"
-
-// Async Signal Interrupt Flag
-extern volatile sig_atomic_t g_interrupted;
-
-// Safe Memory Allocation Validators
-void *safe_malloc(size_t size);
-void *safe_calloc(size_t num, size_t size);
-void *safe_realloc(void *ptr, size_t size);
-char *safe_strdup(const char *s);
-
-typedef struct {
-    char **items;
-    size_t count;
-    size_t capacity;
-} StringArray;
-
-void str_array_init(StringArray *arr);
-void str_array_append(StringArray *arr, const char *str);
-bool str_array_contains(const StringArray *arr, const char *str);
-void str_array_free(StringArray *arr);
-
-// Environment Helpers
-typedef enum {
-    PATH_VALID = 0,
-    ERR_PATH_EMPTY,
-    ERR_NOT_ABSOLUTE,
-    ERR_NOT_A_DIRECTORY,
-    ERR_NOT_OWNED_BY_USER,
-    ERR_WORLD_WRITABLE,
-    ERR_INSUFFICIENT_PERMS
-} PathSanityResult;
-
-PathSanityResult verify_path_sanity(const char *path);
-PathSanityResult verify_home_path_sanity(const char *path);
-const char *path_sanity_strerror(PathSanityResult res, const char *path);
-bool get_user_home_dir(char *buf, size_t buf_size);
-
-typedef enum { XDG_CONFIG = 0, XDG_DATA, XDG_CACHE, XDG_STATE } XdgDirType;
-bool get_xdg_dir(XdgDirType type, char *buf, size_t buf_size);
-bool get_xdg_config_home(char *buf, size_t buf_size);
-bool get_xdg_data_home(char *buf, size_t buf_size);
-bool get_xdg_cache_home(char *buf, size_t buf_size);
-bool get_xdg_state_home(char *buf, size_t buf_size);
-void get_xdg_data_dirs(StringArray *dirs);
-void get_xdg_config_dirs(StringArray *dirs);
-
-typedef struct {
-    char home_dir[PATH_MAX];
-    char target_dir[PATH_MAX];
-    char xdg_config_home[PATH_MAX];
-    char xdg_data_home[PATH_MAX];
-    char xdg_cache_home[PATH_MAX];
-    char xdg_state_home[PATH_MAX];
-    bool is_home_validated;
-    bool is_target_override;
-} AppEnvironment;
-
-void app_env_init(AppEnvironment *env);
-bool app_env_resolve(AppEnvironment *env, const char *cli_target_override);
-
-char *trim_whitespace(char *str);
-bool file_exists(const char *path);
-FILE *open_resource_file(const char *filename);
-bool is_dir(const char *path);
-bool is_symlink(const char *path);
-bool is_executable_in_path(const char *executable);
-char *read_symlink_target(const char *path);
-bool is_symlink_pointing_to(const char *symlink_path,
-                            const char *pkg_file_path,
-                            const char *real_pkg_file_path);
-void get_distro_id(char *buf, size_t buf_size);
-void normalize_path(char *path);
-int collapse_path(char *path);
-int join_path(char *out, size_t out_size, const char *dir, const char *rel);
-int mkdir_p(const char *path, mode_t mode);
-int is_path_prefix(const char *path, const char *prefix);
-void escape_shell_arg(const char *src, char *dest, size_t dest_size);
-void expand_env_vars(const char *src, char *out, size_t out_size);
-void expand_tilde_path(const char *path, char *out, size_t out_size);
-
-// Signal Handling & Temp Path Registration
-void setup_signal_handlers(void);
-void register_temp_path(const char *path);
-void unregister_temp_path(const char *path);
-void cleanup_temp_paths(void);
-void cleanup_temp_paths_signal_safe(void);
-
-void get_dotfiles_dir(char *buf, size_t buf_size);
-bool get_target_dir(char *buf, size_t buf_size);
-void get_all_packages(const char *dotfiles_dir, StringArray *packages);
-
-void parse_stowignore(const char *dir_path, StringArray *ignore_patterns);
-void parse_stowignore_raw(const char *dir_path, StringArray *raw_ignores);
-void get_default_stowignore(StringArray *ignore_patterns);
-bool is_path_ignored(const char *rel_path, const StringArray *raw_ignores);
-
-typedef void (*WalkSymlinkCallback)(const char *symlink_path, void *user_data);
-typedef void (*WalkFileCallback)(const char *file_path, const char *rel_path, void *user_data);
-
-void cleanup_temp_dir_contents(const char *dir_path);
-
-void walk_dir_symlinks(const char *dir_path,
-                       int current_depth,
-                       int max_depth,
-                       WalkSymlinkCallback cb,
-                       void *user_data);
-void walk_dir_files(const char *base_dir,
-                    const char *current_dir,
-                    WalkFileCallback cb,
-                    void *user_data);
-
-int run_system_cmd(const char *cmd);
 
 #endif /* UTILS_H */

@@ -15,30 +15,20 @@
  * You should have received a copy of the GNU General Public License
  * along with this program. If not, see <https://www.gnu.org/licenses/>.
  */
+#ifndef UTILS_PATH_H
+#define UTILS_PATH_H
 
-#define _GNU_SOURCE
-#define _POSIX_C_SOURCE 200809L
+#include <stdbool.h>
+#include <stddef.h>
+#include <sys/types.h>
 
-#include "cli.h"
-#include "cmd_dispatch.h"
-#include "utils/signal.h"
+void normalize_path(char *path);
+int collapse_path(char *path);
+int join_path(char *out, size_t out_size, const char *dir, const char *rel);
+int is_path_prefix(const char *path, const char *prefix);
+void expand_tilde_path(const char *path, char *out, size_t out_size);
 
-int main(int argc, char **argv)
-{
-    setup_signal_handlers();
+void get_dotfiles_dir(char *buf, size_t buf_size);
+bool get_target_dir(char *buf, size_t buf_size);
 
-    CliOptions opts;
-    StringArray args;
-    str_array_init(&args);
-
-    int parse_res = parse_cli_options(argc, argv, &opts, &args);
-    if (parse_res != 0) {
-        str_array_free(&args);
-        return (parse_res < 0) ? 0 : 1;
-    }
-
-    int status = dispatch_command(&args, &opts);
-
-    str_array_free(&args);
-    return status;
-}
+#endif /* UTILS_PATH_H */

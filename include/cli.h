@@ -21,7 +21,7 @@
 
 #include <stdbool.h>
 
-#include "utils.h"
+#include "utils/mem.h"
 
 typedef struct {
     bool auto_install;

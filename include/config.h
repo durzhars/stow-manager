@@ -19,7 +19,7 @@
 #ifndef CONFIG_H
 #define CONFIG_H
 
-#include "utils.h"
+#include "utils/mem.h"
 #include <limits.h>
 
 typedef struct {

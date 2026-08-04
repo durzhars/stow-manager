@@ -22,8 +22,6 @@
 #include <stdbool.h>
 #include <stddef.h>
 
-#include "utils.h"
-
 // Batch operations taking pointer slices directly from ctx->args
 void ignore_init(const char *dotfiles_dir, const char *const *pkgs, size_t count);
 void ignore_clear(const char *dotfiles_dir, const char *const *pkgs, size_t count);

@@ -21,6 +21,13 @@
 
 #include "ignore.h"
 
+#include "logger.h"
+#include "utils/defs.h"
+#include "utils/fs.h"
+#include "utils/mem.h"
+#include "utils/path.h"
+#include "utils/stowignore.h"
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>

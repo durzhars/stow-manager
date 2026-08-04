@@ -15,30 +15,28 @@
  * You should have received a copy of the GNU General Public License
  * along with this program. If not, see <https://www.gnu.org/licenses/>.
  */
+#ifndef UTILS_DEFS_H
+#define UTILS_DEFS_H
 
-#define _GNU_SOURCE
-#define _POSIX_C_SOURCE 200809L
+#ifndef _XOPEN_SOURCE
+#define _XOPEN_SOURCE 700
+#endif
+#ifndef _DEFAULT_SOURCE
+#define _DEFAULT_SOURCE
+#endif
 
-#include "cli.h"
-#include "cmd_dispatch.h"
-#include "utils/signal.h"
+#ifndef STR
+#define XSTR(s) #s
+#define STR(s) XSTR(s)
+#endif
 
-int main(int argc, char **argv)
-{
-    setup_signal_handlers();
+#define COLOR_RED "\033[0;31m"
+#define COLOR_GREEN "\033[0;32m"
+#define COLOR_YELLOW "\033[1;33m"
+#define COLOR_BLUE "\033[0;34m"
+#define COLOR_CYAN "\033[0;36m"
+#define COLOR_WHITE "\033[1;37m"
+#define COLOR_BOLD "\033[1m"
+#define COLOR_RESET "\033[0m"
 
-    CliOptions opts;
-    StringArray args;
-    str_array_init(&args);
-
-    int parse_res = parse_cli_options(argc, argv, &opts, &args);
-    if (parse_res != 0) {
-        str_array_free(&args);
-        return (parse_res < 0) ? 0 : 1;
-    }
-
-    int status = dispatch_command(&args, &opts);
-
-    str_array_free(&args);
-    return status;
-}
+#endif /* UTILS_DEFS_H */

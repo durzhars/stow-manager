@@ -21,6 +21,16 @@
 #define _POSIX_C_SOURCE 200809L
 #include "registry.h"
 
+#include "logger.h"
+#include "utils/env.h"
+#include "utils/fs.h"
+#include "utils/path.h"
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
+
 static FILE *open_registry_file(const char *dotfiles_dir)
 {
     if (dotfiles_dir && *dotfiles_dir != '\0') {

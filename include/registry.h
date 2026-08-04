@@ -19,7 +19,7 @@
 #ifndef REGISTRY_H
 #define REGISTRY_H
 
-#include "utils.h"
+#include "utils/mem.h"
 
 void registry_get_aliases(const char *dotfiles_dir, const char *tool, StringArray *aliases);
 void registry_get_distro_pkg(const char *dotfiles_dir,

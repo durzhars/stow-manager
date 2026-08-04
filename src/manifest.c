@@ -22,6 +22,16 @@
 #include "manifest.h"
 #include "stow.h"
 
+#include "logger.h"
+#include "utils/defs.h"
+#include "utils/fs.h"
+#include "utils/path.h"
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
+
 static void parse_space_delimited(const char *str, StringArray *arr)
 {
     if (!str) {

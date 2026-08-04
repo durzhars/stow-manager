@@ -15,30 +15,16 @@
  * You should have received a copy of the GNU General Public License
  * along with this program. If not, see <https://www.gnu.org/licenses/>.
  */
+#ifndef UTILS_STOWIGNORE_H
+#define UTILS_STOWIGNORE_H
 
-#define _GNU_SOURCE
-#define _POSIX_C_SOURCE 200809L
+#include <stdbool.h>
 
-#include "cli.h"
-#include "cmd_dispatch.h"
-#include "utils/signal.h"
+#include "utils/mem.h"
 
-int main(int argc, char **argv)
-{
-    setup_signal_handlers();
+void parse_stowignore(const char *dir_path, StringArray *ignore_patterns);
+void parse_stowignore_raw(const char *dir_path, StringArray *raw_ignores);
+void get_default_stowignore(StringArray *ignore_patterns);
+bool is_path_ignored(const char *rel_path, const StringArray *raw_ignores);
 
-    CliOptions opts;
-    StringArray args;
-    str_array_init(&args);
-
-    int parse_res = parse_cli_options(argc, argv, &opts, &args);
-    if (parse_res != 0) {
-        str_array_free(&args);
-        return (parse_res < 0) ? 0 : 1;
-    }
-
-    int status = dispatch_command(&args, &opts);
-
-    str_array_free(&args);
-    return status;
-}
+#endif /* UTILS_STOWIGNORE_H */

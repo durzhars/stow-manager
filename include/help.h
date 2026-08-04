@@ -19,8 +19,6 @@
 #ifndef HELP_H
 #define HELP_H
 
-#include "utils.h"
-
 void show_help(void);
 
 #endif /* HELP_H */

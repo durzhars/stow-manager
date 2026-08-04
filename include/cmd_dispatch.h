@@ -22,7 +22,6 @@
 #include <stdbool.h>
 
 #include "cli.h"
-#include "utils.h"
 
 // Unified context passed into every command handler template
 typedef struct {

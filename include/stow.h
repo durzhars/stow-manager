@@ -19,7 +19,7 @@
 #ifndef STOW_ENGINE_H
 #define STOW_ENGINE_H
 
-#include "checker.h"
+#include <stdbool.h>
 
 typedef enum { STOW_STATUS_UNSTOWED = 0, STOW_STATUS_PARTIAL, STOW_STATUS_STOWED } StowStatus;
 

@@ -18,11 +18,26 @@
 
 #define _POSIX_C_SOURCE 200809L
 
+#include "utils/defs.h"
+
 #include "stow.h"
 
+#include "checker.h"
+#include "logger.h"
+#include "manifest.h"
+#include "utils/fs.h"
+#include "utils/mem.h"
+#include "utils/path.h"
+#include "utils/signal.h"
+#include "utils/stowignore.h"
+
+#include <dirent.h>
 #include <errno.h>
 #include <fnmatch.h>
+#include <stdlib.h>
+#include <string.h>
 #include <time.h>
+#include <unistd.h>
 
 static void get_timestamp_str(char *buf, size_t size)
 {

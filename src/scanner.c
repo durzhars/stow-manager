@@ -21,7 +21,17 @@
 #define _POSIX_C_SOURCE 200809L
 #include "scanner.h"
 #include "registry.h"
+
+#include "logger.h"
+#include "manifest.h"
+#include "utils/defs.h"
+#include "utils/fs.h"
+#include "utils/path.h"
 #include <ctype.h>
+#include <dirent.h>
+#include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
 
 static void parse_shebang_interpreter(const char *first_line, StringArray *shebangs)
 {

@@ -24,6 +24,8 @@
 #endif
 
 #include "help.h"
+#include "utils/defs.h"
+#include "utils/fs.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>

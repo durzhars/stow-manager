@@ -15,30 +15,29 @@
  * You should have received a copy of the GNU General Public License
  * along with this program. If not, see <https://www.gnu.org/licenses/>.
  */
+#ifndef UTILS_MEM_H
+#define UTILS_MEM_H
 
-#define _GNU_SOURCE
-#define _POSIX_C_SOURCE 200809L
+#include <stdbool.h>
+#include <stddef.h>
 
-#include "cli.h"
-#include "cmd_dispatch.h"
-#include "utils/signal.h"
+void *safe_malloc(size_t size);
+void *safe_calloc(size_t num, size_t size);
+void *safe_realloc(void *ptr, size_t size);
+char *safe_strdup(const char *s);
 
-int main(int argc, char **argv)
-{
-    setup_signal_handlers();
+typedef struct {
+    char **items;
+    size_t count;
+    size_t capacity;
+} StringArray;
 
-    CliOptions opts;
-    StringArray args;
-    str_array_init(&args);
+void str_array_init(StringArray *arr);
+void str_array_append(StringArray *arr, const char *str);
+bool str_array_contains(const StringArray *arr, const char *str);
+void str_array_free(StringArray *arr);
 
-    int parse_res = parse_cli_options(argc, argv, &opts, &args);
-    if (parse_res != 0) {
-        str_array_free(&args);
-        return (parse_res < 0) ? 0 : 1;
-    }
+char *trim_whitespace(char *str);
+void escape_shell_arg(const char *src, char *dest, size_t dest_size);
 
-    int status = dispatch_command(&args, &opts);
-
-    str_array_free(&args);
-    return status;
-}
+#endif /* UTILS_MEM_H */

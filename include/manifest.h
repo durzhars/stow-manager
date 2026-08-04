@@ -19,7 +19,7 @@
 #ifndef MANIFEST_H
 #define MANIFEST_H
 
-#include "utils.h"
+#include "utils/mem.h"
 
 typedef struct {
     char *package_name;
