@@ -1,0 +1,6 @@
+# Package Dependency Manifest
+# Syntax: TARGET="path", REQUIRED="tool ...", OPTIONAL="tool ...", CONFLICTS="tool ..."
+TARGET=""
+REQUIRED=""
+OPTIONAL=""
+CONFLICTS=""

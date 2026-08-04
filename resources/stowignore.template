@@ -1,0 +1,12 @@
+# Syntax matches standard glob/gitignore pattern rules
+
+# Build & Runtime Cache Artifacts
+*.zwc
+*.pyc
+*.stow_backup_*
+
+# OS & Editor Metadata
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
