@@ -20,6 +20,7 @@
 #define _POSIX_C_SOURCE 200809L
 
 #include "core/ignore.h"
+#include "core/registry.h"
 #include "core/stowignore.h"
 
 #include "utils/defs.h"

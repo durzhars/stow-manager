@@ -21,14 +21,65 @@
 #define _POSIX_C_SOURCE 200809L
 
 #include "core/registry.h"
+#include "core/stowignore.h"
 
 #include "utils/fs.h"
 #include "utils/path.h"
 
+#include <dirent.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+
+void get_all_packages(const char *dotfiles_dir, StringArray *packages)
+{
+    DIR *dir = opendir(dotfiles_dir);
+    if (!dir) {
+        return;
+    }
+
+    StringArray ignore_patterns;
+    str_array_init(&ignore_patterns);
+    get_default_stowignore(&ignore_patterns);
+    parse_stowignore_raw(dotfiles_dir, &ignore_patterns);
+
+    struct dirent *entry;
+    char path[PATH_MAX * 2];
+    size_t dotfiles_len = strlen(dotfiles_dir);
+
+    if (dotfiles_len < sizeof(path) - 1) {
+        memcpy(path, dotfiles_dir, dotfiles_len);
+        if (dotfiles_len > 0 && path[dotfiles_len - 1] != '/') {
+            path[dotfiles_len++] = '/';
+        }
+    }
+
+    while ((entry = readdir(dir)) != NULL) {
+        const char *name = entry->d_name;
+        if (name[0] == '.' && (name[1] == '\0' || (name[1] == '.' && name[2] == '\0'))) {
+            continue;
+        }
+
+        if (!is_path_ignored(name, &ignore_patterns)) {
+            // Leverage d_type to avoid unnecessary stat calls when available
+            if (entry->d_type == DT_DIR) {
+                str_array_append(packages, name);
+            } else if (entry->d_type == DT_UNKNOWN || entry->d_type == DT_LNK) {
+                size_t name_len = strlen(name);
+                if (dotfiles_len + name_len < sizeof(path)) {
+                    memcpy(path + dotfiles_len, name, name_len + 1);
+                    if (is_dir(path) && !is_symlink(path)) {
+                        str_array_append(packages, name);
+                    }
+                }
+            }
+        }
+    }
+
+    str_array_free(&ignore_patterns);
+    closedir(dir);
+}
 
 static FILE *open_registry_file(const char *dotfiles_dir)
 {

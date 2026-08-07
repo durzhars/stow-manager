@@ -23,6 +23,7 @@
 #include "core/checker.h"
 #include "core/manifest.h"
 #include "core/registry.h"
+#include "core/stow.h"
 
 #include "utils/defs.h"
 #include "utils/env.h"

@@ -29,5 +29,6 @@ void registry_get_distro_pkg(const char *dotfiles_dir,
                              size_t out_size);
 void registry_get_all_tools(const char *dotfiles_dir, StringArray *tools);
 bool is_tool_installed_dynamic(const char *dotfiles_dir, const char *tool);
+void get_all_packages(const char *dotfiles_dir, StringArray *packages);
 
 #endif /* REGISTRY_H */

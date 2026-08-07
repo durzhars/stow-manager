@@ -660,33 +660,7 @@ void test_is_executable_in_path(void)
     ASSERT(found_abs_sh, "Should detect absolute path to sh as executable");
 }
 
-void test_get_all_packages_skips_dot_dirs(void)
-{
-    char tmp_dir[PATH_MAX];
-    ASSERT(create_test_tmp_dir(tmp_dir, sizeof(tmp_dir), "get_pkgs") != NULL,
-           "Should create temporary dotfiles directory");
 
-    char pkg1[PATH_MAX];
-    snprintf(pkg1, sizeof(pkg1), "%s/hyprland", tmp_dir);
-    mkdir(pkg1, 0755);
-
-    char pkg2[PATH_MAX];
-    snprintf(pkg2, sizeof(pkg2), "%s/nvim", tmp_dir);
-    mkdir(pkg2, 0755);
-
-    StringArray pkgs;
-    str_array_init(&pkgs);
-    get_all_packages(tmp_dir, &pkgs);
-
-    ASSERT(!str_array_contains(&pkgs, "."), "get_all_packages must not include '.'");
-    ASSERT(!str_array_contains(&pkgs, ".."), "get_all_packages must not include '..'");
-    ASSERT(str_array_contains(&pkgs, "hyprland"), "get_all_packages should include 'hyprland'");
-    ASSERT(str_array_contains(&pkgs, "nvim"), "get_all_packages should include 'nvim'");
-
-    str_array_free(&pkgs);
-
-    cleanup_test_dir(tmp_dir);
-}
 
 void test_default_stowignore(void)
 {

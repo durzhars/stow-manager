@@ -50,27 +50,8 @@ bool is_symlink_pointing_to(const char *symlink_path,
                             const char *real_pkg_file_path);
 int mkdir_p(const char *path, __mode_t mode);
 
-void get_all_packages(const char *dotfiles_dir, StringArray *packages);
-
 typedef void (*WalkSymlinkCallback)(const char *symlink_path, void *user_data);
 typedef void (*WalkFileCallback)(const char *file_path, const char *rel_path, void *user_data);
-
-typedef struct {
-    char rel_path[PATH_MAX];
-    char full_path[PATH_MAX * 2];
-    bool is_dir;
-} PkgFileEntry;
-
-typedef struct {
-    PkgFileEntry *entries;
-    size_t count;
-    size_t capacity;
-} PkgFileList;
-
-void pkg_file_list_init(PkgFileList *list);
-void pkg_file_list_free(PkgFileList *list);
-void pkg_file_list_append(PkgFileList *list, const char *rel_path, const char *full_path, bool is_dir);
-void collect_package_files(const char *pkg_dir, const StringArray *raw_ignores, PkgFileList *list);
 
 void cleanup_temp_dir_contents(const char *dir_path);
 
@@ -83,12 +64,6 @@ void walk_dir_files(const char *base_dir,
                     const char *current_dir,
                     WalkFileCallback cb,
                     void *user_data);
-
-void walk_target_dir_symlinks_targeted(const char *target_dir,
-                                       const char *dotfiles_dir,
-                                       const PkgFileList *pkg_files,
-                                       WalkSymlinkCallback cb,
-                                       void *user_data);
 
 int run_system_cmd(const char *cmd);
 

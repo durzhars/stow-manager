@@ -24,11 +24,12 @@
 
 #include "core/checker.h"
 #include "core/manifest.h"
+#include "core/registry.h"
+#include "core/stowignore.h"
 #include "utils/fs.h"
 #include "utils/logger.h"
 #include "utils/path.h"
 #include "utils/signal.h"
-#include "utils/stowignore.h"
 #include "utils/timer.h"
 
 #include <dirent.h>
@@ -38,6 +39,159 @@
 #include <string.h>
 #include <time.h>
 #include <unistd.h>
+
+typedef struct {
+    StrSet visited_paths;
+    WalkSymlinkCallback cb;
+    void *user_data;
+} TargetedWalkState;
+
+static void check_and_notify_symlink(const char *path, TargetedWalkState *state)
+{
+    if (!path || *path == '\0') {
+        return;
+    }
+    if (!str_set_add(&state->visited_paths, path)) {
+        return;
+    }
+
+    if (is_symlink(path)) {
+        state->cb(path, state->user_data);
+    }
+}
+
+static void add_rel_path_and_parents(StrSet *set, const char *rel_path)
+{
+    if (!rel_path || *rel_path == '\0') {
+        return;
+    }
+
+    if (!str_set_add(set, rel_path)) {
+        return;
+    }
+
+    char parent[PATH_MAX * 2];
+    size_t len = strlen(rel_path);
+    if (len >= sizeof(parent)) {
+        return;
+    }
+    memcpy(parent, rel_path, len + 1);
+
+    char *slash = strrchr(parent, '/');
+    while (slash) {
+        *slash = '\0';
+        if (*parent != '\0') {
+            if (!str_set_add(set, parent)) {
+                break;
+            }
+        }
+        slash = strrchr(parent, '/');
+    }
+}
+
+void walk_target_dir_symlinks_targeted(const char *target_dir,
+                                       const char *dotfiles_dir,
+                                       const PkgFileList *pkg_files,
+                                       WalkSymlinkCallback cb,
+                                       void *user_data)
+{
+    if (!target_dir || !dotfiles_dir || !cb) {
+        return;
+    }
+
+    PerfTimer t = perf_timer_start("walk_target_dir_symlinks_targeted");
+    TargetedWalkState state;
+    str_set_init(&state.visited_paths);
+    state.cb = cb;
+    state.user_data = user_data;
+
+    // 1. Scan top-level entries directly inside target_dir (depth 1)
+    DIR *dir = opendir(target_dir);
+    if (dir) {
+        struct dirent *entry;
+        while ((entry = readdir(dir)) != NULL) {
+            const char *name = entry->d_name;
+            if (name[0] == '.' && (name[1] == '\0' || (name[1] == '.' && name[2] == '\0'))) {
+                continue;
+            }
+            if (entry->d_type == DT_LNK || entry->d_type == DT_UNKNOWN) {
+                char path[PATH_MAX * 2];
+                join_path(path, sizeof(path), target_dir, name);
+                check_and_notify_symlink(path, &state);
+            }
+        }
+        closedir(dir);
+    }
+
+    // 2. Collect relative paths across target package or all packages in dotfiles_dir
+    StrSet rel_paths;
+    str_set_init(&rel_paths);
+
+    if (pkg_files && pkg_files->count > 0) {
+        for (size_t k = 0; k < pkg_files->count; k++) {
+            add_rel_path_and_parents(&rel_paths, pkg_files->entries[k].rel_path);
+        }
+    } else {
+        StringArray packages;
+        str_array_init(&packages);
+        get_all_packages(dotfiles_dir, &packages);
+
+        for (size_t i = 0; i < packages.count; i++) {
+            char pkg_dir[PATH_MAX * 2];
+            join_path(pkg_dir, sizeof(pkg_dir), dotfiles_dir, packages.items[i]);
+            if (is_dir(pkg_dir)) {
+                StringArray raw_ignores;
+                str_array_init(&raw_ignores);
+                parse_stowignore_raw(dotfiles_dir, &raw_ignores);
+                parse_stowignore_raw(pkg_dir, &raw_ignores);
+
+                PkgFileList fetched_files;
+                collect_package_files(pkg_dir, &raw_ignores, &fetched_files);
+                for (size_t k = 0; k < fetched_files.count; k++) {
+                    add_rel_path_and_parents(&rel_paths, fetched_files.entries[k].rel_path);
+                }
+                pkg_file_list_free(&fetched_files);
+                str_array_free(&raw_ignores);
+            }
+        }
+        str_array_free(&packages);
+    }
+
+    // 3. For each relative path, check target_dir/rel_path and its immediate children if it's a directory
+    for (size_t i = 0; i < rel_paths.capacity; i++) {
+        if (!rel_paths.keys || !rel_paths.keys[i]) {
+            continue;
+        }
+        const char *rel = rel_paths.keys[i];
+        char target_path[PATH_MAX * 2];
+        join_path(target_path, sizeof(target_path), target_dir, rel);
+
+        check_and_notify_symlink(target_path, &state);
+
+        if (is_dir(target_path) && !is_symlink(target_path)) {
+            DIR *tdir = opendir(target_path);
+            if (tdir) {
+                struct dirent *entry;
+                while ((entry = readdir(tdir)) != NULL) {
+                    const char *name = entry->d_name;
+                    if (name[0] == '.' && (name[1] == '\0' || (name[1] == '.' && name[2] == '\0'))) {
+                        continue;
+                    }
+                    if (entry->d_type == DT_LNK || entry->d_type == DT_UNKNOWN) {
+                        char child_path[PATH_MAX * 2];
+                        join_path(child_path, sizeof(child_path), target_path, name);
+                        check_and_notify_symlink(child_path, &state);
+                    }
+                }
+                closedir(tdir);
+            }
+        }
+    }
+
+    str_set_free(&rel_paths);
+    str_set_free(&state.visited_paths);
+    perf_timer_log(&t);
+}
 
 static void get_timestamp_str(char *buf, size_t size)
 {

@@ -24,6 +24,7 @@
 #define STR(s) XSTR(s)
 #endif
 
+#include <dirent.h>
 #include <fnmatch.h>
 #include <limits.h>
 #include <stdio.h>
@@ -32,7 +33,139 @@
 
 #include "core/stowignore.h"
 #include "utils/fs.h"
+#include "utils/mem.h"
 #include "utils/path.h"
+#include "utils/timer.h"
+
+void pkg_file_list_init(PkgFileList *list)
+{
+    if (!list) return;
+    list->entries = NULL;
+    list->count = 0;
+    list->capacity = 0;
+}
+
+void pkg_file_list_free(PkgFileList *list)
+{
+    if (!list) return;
+    free(list->entries);
+    list->entries = NULL;
+    list->count = 0;
+    list->capacity = 0;
+}
+
+void pkg_file_list_append(PkgFileList *list, const char *rel_path, const char *full_path, bool is_dir)
+{
+    if (!list || !rel_path || !full_path) return;
+    if (list->count >= list->capacity) {
+        size_t new_cap = list->capacity == 0 ? 32 : list->capacity * 2;
+        PkgFileEntry *new_entries = safe_realloc(list->entries, new_cap * sizeof(PkgFileEntry));
+        list->entries = new_entries;
+        list->capacity = new_cap;
+    }
+    PkgFileEntry *entry = &list->entries[list->count++];
+    size_t rel_len = strlen(rel_path);
+    if (rel_len < sizeof(entry->rel_path)) {
+        memcpy(entry->rel_path, rel_path, rel_len + 1);
+    } else {
+        snprintf(entry->rel_path, sizeof(entry->rel_path), "%s", rel_path);
+    }
+
+    size_t full_len = strlen(full_path);
+    if (full_len < sizeof(entry->full_path)) {
+        memcpy(entry->full_path, full_path, full_len + 1);
+    } else {
+        snprintf(entry->full_path, sizeof(entry->full_path), "%s", full_path);
+    }
+    entry->is_dir = is_dir;
+}
+
+typedef struct {
+    const StringArray *raw_ignores;
+    PkgFileList *list;
+    char full_buf[PATH_MAX * 2];
+    char rel_buf[PATH_MAX * 2];
+} CollectState;
+
+static void collect_package_files_recursive(CollectState *state)
+{
+    DIR *dir = opendir(state->full_buf);
+    if (!dir) {
+        return;
+    }
+
+    size_t base_full_len = strlen(state->full_buf);
+    size_t base_rel_len = strlen(state->rel_buf);
+
+    struct dirent *entry;
+    while ((entry = readdir(dir)) != NULL) {
+        const char *name = entry->d_name;
+        if (name[0] == '.' && (name[1] == '\0' || (name[1] == '.' && name[2] == '\0'))) {
+            continue;
+        }
+
+        size_t name_len = strlen(name);
+
+        char *full_p = state->full_buf + base_full_len;
+        if (base_full_len > 0 && state->full_buf[base_full_len - 1] != '/') {
+            *full_p++ = '/';
+        }
+        if ((size_t)(full_p - state->full_buf) + name_len < sizeof(state->full_buf)) {
+            memcpy(full_p, name, name_len + 1);
+        }
+
+        char *rel_p = state->rel_buf + base_rel_len;
+        if (base_rel_len > 0 && state->rel_buf[base_rel_len - 1] != '/') {
+            *rel_p++ = '/';
+        }
+        if ((size_t)(rel_p - state->rel_buf) + name_len < sizeof(state->rel_buf)) {
+            memcpy(rel_p, name, name_len + 1);
+        }
+
+        // Fast directory pruning: check ignore list BEFORE recursing or adding
+        if (state->raw_ignores && is_path_ignored(state->rel_buf, state->raw_ignores)) {
+            state->full_buf[base_full_len] = '\0';
+            state->rel_buf[base_rel_len] = '\0';
+            continue;
+        }
+
+        bool entry_is_dir = (entry->d_type == DT_DIR);
+        if (entry->d_type == DT_UNKNOWN) {
+            entry_is_dir = is_dir(state->full_buf) && !is_symlink(state->full_buf);
+        }
+
+        if (entry_is_dir) {
+            collect_package_files_recursive(state);
+        } else {
+            pkg_file_list_append(state->list, state->rel_buf, state->full_buf, false);
+        }
+
+        state->full_buf[base_full_len] = '\0';
+        state->rel_buf[base_rel_len] = '\0';
+    }
+
+    closedir(dir);
+}
+
+void collect_package_files(const char *pkg_dir, const StringArray *raw_ignores, PkgFileList *list)
+{
+    PerfTimer t = perf_timer_start("collect_package_files");
+    pkg_file_list_init(list);
+
+    CollectState state;
+    state.raw_ignores = raw_ignores;
+    state.list = list;
+    size_t len = strlen(pkg_dir);
+    if (len < sizeof(state.full_buf)) {
+        memcpy(state.full_buf, pkg_dir, len + 1);
+    } else {
+        snprintf(state.full_buf, sizeof(state.full_buf), "%s", pkg_dir);
+    }
+    state.rel_buf[0] = '\0';
+
+    collect_package_files_recursive(&state);
+    perf_timer_log(&t);
+}
 
 typedef void (*StowignoreLineCallback)(const char *line, void *user_data);
 
