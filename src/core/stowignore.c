@@ -39,7 +39,8 @@
 
 void pkg_file_list_init(PkgFileList *list)
 {
-    if (!list) return;
+    if (!list)
+        return;
     list->entries = NULL;
     list->count = 0;
     list->capacity = 0;
@@ -47,16 +48,21 @@ void pkg_file_list_init(PkgFileList *list)
 
 void pkg_file_list_free(PkgFileList *list)
 {
-    if (!list) return;
+    if (!list)
+        return;
     free(list->entries);
     list->entries = NULL;
     list->count = 0;
     list->capacity = 0;
 }
 
-void pkg_file_list_append(PkgFileList *list, const char *rel_path, const char *full_path, bool is_dir)
+void pkg_file_list_append(PkgFileList *list,
+                          const char *rel_path,
+                          const char *full_path,
+                          bool is_dir)
 {
-    if (!list || !rel_path || !full_path) return;
+    if (!list || !rel_path || !full_path)
+        return;
     if (list->count >= list->capacity) {
         size_t new_cap = list->capacity == 0 ? 32 : list->capacity * 2;
         PkgFileEntry *new_entries = safe_realloc(list->entries, new_cap * sizeof(PkgFileEntry));
@@ -87,15 +93,13 @@ typedef struct {
     char rel_buf[PATH_MAX * 2];
 } CollectState;
 
-static void collect_package_files_recursive(CollectState *state)
+static void
+collect_package_files_recursive(CollectState *state, size_t base_full_len, size_t base_rel_len)
 {
     DIR *dir = opendir(state->full_buf);
     if (!dir) {
         return;
     }
-
-    size_t base_full_len = strlen(state->full_buf);
-    size_t base_rel_len = strlen(state->rel_buf);
 
     struct dirent *entry;
     while ((entry = readdir(dir)) != NULL) {
@@ -104,38 +108,43 @@ static void collect_package_files_recursive(CollectState *state)
             continue;
         }
 
+        // Avoid strlen(name) if using dirent d_namlen (BSD/macOS) or track offset during copy
         size_t name_len = strlen(name);
 
         char *full_p = state->full_buf + base_full_len;
         if (base_full_len > 0 && state->full_buf[base_full_len - 1] != '/') {
             *full_p++ = '/';
         }
-        if ((size_t)(full_p - state->full_buf) + name_len < sizeof(state->full_buf)) {
-            memcpy(full_p, name, name_len + 1);
+        if ((size_t)(full_p - state->full_buf) + name_len >= sizeof(state->full_buf)) {
+            continue;
         }
+        memcpy(full_p, name, name_len + 1);
+        size_t next_full_len = (size_t)(full_p - state->full_buf) + name_len;
 
         char *rel_p = state->rel_buf + base_rel_len;
         if (base_rel_len > 0 && state->rel_buf[base_rel_len - 1] != '/') {
             *rel_p++ = '/';
         }
-        if ((size_t)(rel_p - state->rel_buf) + name_len < sizeof(state->rel_buf)) {
-            memcpy(rel_p, name, name_len + 1);
+        if ((size_t)(rel_p - state->rel_buf) + name_len >= sizeof(state->rel_buf)) {
+            state->full_buf[base_full_len] = '\0';
+            continue;
         }
+        memcpy(rel_p, name, name_len + 1);
+        size_t next_rel_len = (size_t)(rel_p - state->rel_buf) + name_len;
 
-        // Fast directory pruning: check ignore list BEFORE recursing or adding
         if (state->raw_ignores && is_path_ignored(state->rel_buf, state->raw_ignores)) {
             state->full_buf[base_full_len] = '\0';
             state->rel_buf[base_rel_len] = '\0';
             continue;
         }
 
-        bool entry_is_dir = (entry->d_type == DT_DIR);
+        int entry_is_dir = (entry->d_type == DT_DIR);
         if (entry->d_type == DT_UNKNOWN) {
             entry_is_dir = is_dir(state->full_buf) && !is_symlink(state->full_buf);
         }
 
         if (entry_is_dir) {
-            collect_package_files_recursive(state);
+            collect_package_files_recursive(state, next_full_len, next_rel_len);
         } else {
             pkg_file_list_append(state->list, state->rel_buf, state->full_buf, false);
         }
@@ -152,18 +161,30 @@ void collect_package_files(const char *pkg_dir, const StringArray *raw_ignores, 
     PerfTimer t = perf_timer_start("collect_package_files");
     pkg_file_list_init(list);
 
+    size_t len = strlen(pkg_dir);
+    if (len >= sizeof(((CollectState *)0)->full_buf)) {
+        // Path exceeds buffer capacity; handle error gracefully instead of truncating
+        perf_timer_log(&t);
+        return;
+    }
+
     CollectState state;
     state.raw_ignores = raw_ignores;
     state.list = list;
-    size_t len = strlen(pkg_dir);
-    if (len < sizeof(state.full_buf)) {
-        memcpy(state.full_buf, pkg_dir, len + 1);
-    } else {
-        snprintf(state.full_buf, sizeof(state.full_buf), "%s", pkg_dir);
+
+    memcpy(state.full_buf, pkg_dir, len + 1);
+
+    // Normalize trailing slash if user passed e.g. "path/to/pkg/"
+    if (len > 0 && state.full_buf[len - 1] == '/') {
+        len--;
+        state.full_buf[len] = '\0';
     }
+
     state.rel_buf[0] = '\0';
 
-    collect_package_files_recursive(&state);
+    // Pass base_full_len and base_rel_len (0) directly down the stack
+    collect_package_files_recursive(&state, len, 0);
+
     perf_timer_log(&t);
 }
 
