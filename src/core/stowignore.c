@@ -158,7 +158,11 @@ collect_package_files_recursive(CollectState *state, size_t base_full_len, size_
 
 void collect_package_files(const char *pkg_dir, const StringArray *raw_ignores, PkgFileList *list)
 {
-    PerfTimer t = perf_timer_start("collect_package_files");
+    const char *pkg_name = strrchr(pkg_dir, '/');
+    pkg_name = pkg_name ? pkg_name + 1 : pkg_dir;
+    char timer_label[256];
+    snprintf(timer_label, sizeof(timer_label), "collect_package_files (%s)", pkg_name);
+    PerfTimer t = perf_timer_start(timer_label);
     pkg_file_list_init(list);
 
     size_t len = strlen(pkg_dir);

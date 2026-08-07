@@ -717,8 +717,44 @@ get_package_stow_status(const char *target_dir, const char *dotfiles_dir, const 
 
 bool is_package_stowed(const char *target_dir, const char *dotfiles_dir, const char *pkg_name)
 {
-    StowStatus status = get_package_stow_status(target_dir, dotfiles_dir, pkg_name);
-    return (bool)(status == STOW_STATUS_STOWED || status == STOW_STATUS_PARTIAL);
+    char pkg_dir[PATH_MAX * 2];
+    join_path(pkg_dir, sizeof(pkg_dir), dotfiles_dir, pkg_name);
+
+    if (!is_dir(pkg_dir)) {
+        return false;
+    }
+
+    char real_pkg_dir[PATH_MAX * 2];
+    if (realpath(pkg_dir, real_pkg_dir) == NULL) {
+        snprintf(real_pkg_dir, sizeof(real_pkg_dir), "%s", pkg_dir);
+    }
+
+    StringArray raw_ignores;
+    init_package_ignores(&raw_ignores, dotfiles_dir, pkg_dir);
+
+    PkgFileList pkg_files;
+    collect_package_files(pkg_dir, &raw_ignores, &pkg_files);
+
+    bool stowed = false;
+    for (size_t i = 0; i < pkg_files.count; i++) {
+        char target_path[PATH_MAX * 2];
+        join_path(target_path, sizeof(target_path), target_dir, pkg_files.entries[i].rel_path);
+
+        char pkg_file_path[PATH_MAX * 2];
+        join_path(pkg_file_path, sizeof(pkg_file_path), pkg_dir, pkg_files.entries[i].rel_path);
+
+        char real_pkg_file_path[PATH_MAX * 2];
+        join_path(real_pkg_file_path, sizeof(real_pkg_file_path), real_pkg_dir, pkg_files.entries[i].rel_path);
+
+        if (is_symlink(target_path) && is_symlink_pointing_to(target_path, pkg_file_path, real_pkg_file_path)) {
+            stowed = true;
+            break;
+        }
+    }
+
+    pkg_file_list_free(&pkg_files);
+    str_array_free(&raw_ignores);
+    return stowed;
 }
 
 void handle_mutual_exclusions(const char *target_dir,
