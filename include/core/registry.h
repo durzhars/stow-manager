@@ -15,16 +15,19 @@
  * You should have received a copy of the GNU General Public License
  * along with this program. If not, see <https://www.gnu.org/licenses/>.
  */
-#ifndef UTILS_STOWIGNORE_H
-#define UTILS_STOWIGNORE_H
 
-#include <stdbool.h>
+#ifndef REGISTRY_H
+#define REGISTRY_H
 
 #include "utils/str.h"
 
-void parse_stowignore(const char *dir_path, StringArray *ignore_patterns);
-void parse_stowignore_raw(const char *dir_path, StringArray *raw_ignores);
-void get_default_stowignore(StringArray *ignore_patterns);
-bool is_path_ignored(const char *rel_path, const StringArray *raw_ignores);
+void registry_get_aliases(const char *dotfiles_dir, const char *tool, StringArray *aliases);
+void registry_get_distro_pkg(const char *dotfiles_dir,
+                             const char *tool,
+                             const char *distro,
+                             char *out,
+                             size_t out_size);
+void registry_get_all_tools(const char *dotfiles_dir, StringArray *tools);
+bool is_tool_installed_dynamic(const char *dotfiles_dir, const char *tool);
 
-#endif /* UTILS_STOWIGNORE_H */
+#endif /* REGISTRY_H */

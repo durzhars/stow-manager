@@ -20,15 +20,17 @@
 #define _DEFAULT_SOURCE
 #define _POSIX_C_SOURCE 200809L
 
-#include "utils.h"
-#include <ctype.h>
+#include "utils/mem.h"
+#include "utils/logger.h"
+
 #include <stdlib.h>
 #include <string.h>
 
 void *safe_malloc(size_t size)
 {
-    if (size == 0)
+    if (size == 0) {
         return NULL;
+    }
     void *ptr = malloc(size);
     if (!ptr) {
         log_error("Out of memory! Failed to allocate %zu bytes", size);
@@ -39,8 +41,9 @@ void *safe_malloc(size_t size)
 
 void *safe_calloc(size_t num, size_t size)
 {
-    if (num == 0 || size == 0)
+    if (num == 0 || size == 0) {
         return NULL;
+    }
     void *ptr = calloc(num, size);
     if (!ptr) {
         log_error("Out of memory! Failed to allocate %zu x %zu bytes", num, size);
@@ -65,132 +68,13 @@ void *safe_realloc(void *ptr, size_t size)
 
 char *safe_strdup(const char *s)
 {
-    if (!s)
+    if (!s) {
         return NULL;
+    }
     char *dup = strdup(s);
     if (!dup) {
         log_error("Out of memory! Failed to duplicate string");
         exit(EXIT_FAILURE);
     }
     return dup;
-}
-
-void str_array_init(StringArray *arr)
-{
-    arr->items = NULL;
-    arr->count = 0;
-    arr->capacity = 0;
-}
-
-void str_array_append(StringArray *arr, const char *str)
-{
-    if (!str || *str == '\0') {
-        return;
-    }
-    if (arr->count >= arr->capacity) {
-        size_t new_cap = (arr->capacity == 0) ? 8 : arr->capacity * 2;
-        char **new_items = (char **)safe_realloc((void *)arr->items, new_cap * sizeof(char *));
-        arr->items = new_items;
-        arr->capacity = new_cap;
-    }
-    arr->items[arr->count++] = safe_strdup(str);
-}
-
-bool str_array_contains(const StringArray *arr, const char *str)
-{
-    if (!arr || !str) {
-        return false;
-    }
-    for (size_t i = 0; i < arr->count; i++) {
-        if (strcmp(arr->items[i], str) == 0) {
-            return true;
-        }
-    }
-    return false;
-}
-
-void str_array_free(StringArray *arr)
-{
-    if (!arr) {
-        return;
-    }
-    for (size_t i = 0; i < arr->count; i++) {
-        free(arr->items[i]);
-    }
-    free((void *)arr->items);
-    arr->items = NULL;
-    arr->count = 0;
-    arr->capacity = 0;
-}
-
-char *trim_whitespace(char *str)
-{
-    if (!str) {
-        return NULL;
-    }
-    while (isspace((unsigned char)*str)) {
-        str++;
-    }
-    if (*str == '\0') {
-        return str;
-    }
-
-    char *end = str + strlen(str) - 1;
-    while (end > str && isspace((unsigned char)*end)) {
-        end--;
-    }
-    end[1] = '\0';
-
-    if (end > str && ((*str == '"' && end[0] == '"') || (*str == '\'' && end[0] == '\''))) {
-        str++;
-        end[0] = '\0';
-    }
-    return str;
-}
-
-void escape_shell_arg(const char *src, char *dest, size_t dest_size)
-{
-    if (!dest || dest_size == 0) {
-        return;
-    }
-    if (!src) {
-        dest[0] = '\0';
-        return;
-    }
-
-    size_t d = 0;
-    if (d + 1 >= dest_size) {
-        dest[0] = '\0';
-        return;
-    }
-    dest[d++] = '\'';
-
-    size_t i = 0;
-    bool overflow = false;
-    for (i = 0; src[i] != '\0'; i++) {
-        if (src[i] == '\'') {
-            if (d + 4 >= dest_size) {
-                overflow = true;
-                break;
-            }
-            dest[d++] = '\'';
-            dest[d++] = '\\';
-            dest[d++] = '\'';
-            dest[d++] = '\'';
-        } else {
-            if (d + 1 >= dest_size) {
-                overflow = true;
-                break;
-            }
-            dest[d++] = src[i];
-        }
-    }
-
-    if (overflow || src[i] != '\0' || d + 1 >= dest_size) {
-        dest[0] = '\0';
-        return;
-    }
-
-    dest[d++] = '\'';
-    dest[d] = '\0';
 }

@@ -26,18 +26,4 @@ void *safe_calloc(size_t num, size_t size);
 void *safe_realloc(void *ptr, size_t size);
 char *safe_strdup(const char *s);
 
-typedef struct {
-    char **items;
-    size_t count;
-    size_t capacity;
-} StringArray;
-
-void str_array_init(StringArray *arr);
-void str_array_append(StringArray *arr, const char *str);
-bool str_array_contains(const StringArray *arr, const char *str);
-void str_array_free(StringArray *arr);
-
-char *trim_whitespace(char *str);
-void escape_shell_arg(const char *src, char *dest, size_t dest_size);
-
 #endif /* UTILS_MEM_H */

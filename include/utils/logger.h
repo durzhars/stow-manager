@@ -15,16 +15,29 @@
  * You should have received a copy of the GNU General Public License
  * along with this program. If not, see <https://www.gnu.org/licenses/>.
  */
-#ifndef UTILS_STOWIGNORE_H
-#define UTILS_STOWIGNORE_H
+
+#ifndef LOGGER_H
+#define LOGGER_H
 
 #include <stdbool.h>
 
-#include "utils/str.h"
+typedef enum {
+    LOG_LEVEL_DEBUG = 0,
+    LOG_LEVEL_INFO,
+    LOG_LEVEL_SUCCESS,
+    LOG_LEVEL_WARN,
+    LOG_LEVEL_ERROR,
+    LOG_LEVEL_OFF
+} LogLevel;
 
-void parse_stowignore(const char *dir_path, StringArray *ignore_patterns);
-void parse_stowignore_raw(const char *dir_path, StringArray *raw_ignores);
-void get_default_stowignore(StringArray *ignore_patterns);
-bool is_path_ignored(const char *rel_path, const StringArray *raw_ignores);
+void logger_init(LogLevel level, const char *log_file_path);
+void logger_set_level(LogLevel level);
+void logger_close(void);
 
-#endif /* UTILS_STOWIGNORE_H */
+void log_debug(const char *fmt, ...);
+void log_info(const char *fmt, ...);
+void log_success(const char *fmt, ...);
+void log_warn(const char *fmt, ...);
+void log_error(const char *fmt, ...);
+
+#endif /* LOGGER_H */

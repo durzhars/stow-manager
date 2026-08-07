@@ -19,8 +19,8 @@
 #define _GNU_SOURCE
 #define _POSIX_C_SOURCE 200809L
 
-#include "cli.h"
-#include "cmd_dispatch.h"
+#include "cli/cli.h"
+#include "cli/cmd_dispatch.h"
 #include "utils/signal.h"
 
 int main(int argc, char **argv)

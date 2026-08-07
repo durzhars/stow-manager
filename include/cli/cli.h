@@ -15,16 +15,23 @@
  * You should have received a copy of the GNU General Public License
  * along with this program. If not, see <https://www.gnu.org/licenses/>.
  */
-#ifndef UTILS_STOWIGNORE_H
-#define UTILS_STOWIGNORE_H
+
+#ifndef STOW_CLI_H
+#define STOW_CLI_H
 
 #include <stdbool.h>
 
 #include "utils/str.h"
 
-void parse_stowignore(const char *dir_path, StringArray *ignore_patterns);
-void parse_stowignore_raw(const char *dir_path, StringArray *raw_ignores);
-void get_default_stowignore(StringArray *ignore_patterns);
-bool is_path_ignored(const char *rel_path, const StringArray *raw_ignores);
+typedef struct {
+    bool auto_install;
+    bool dry_run;
+    bool save_flag;
+    bool profile;
+    const char *cli_dotfiles_dir;
+    const char *cli_target_dir;
+} CliOptions;
 
-#endif /* UTILS_STOWIGNORE_H */
+int parse_cli_options(int argc, char **argv, CliOptions *opts, StringArray *positional_args);
+
+#endif /* STOW_CLI_H */

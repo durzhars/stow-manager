@@ -27,7 +27,9 @@
 #include <string.h>
 #include <unistd.h>
 
-#include "utils.h"
+#include "utils/fs.h"
+#include "utils/mem.h"
+#include "utils/signal.h"
 
 volatile sig_atomic_t g_interrupted = 0;
 

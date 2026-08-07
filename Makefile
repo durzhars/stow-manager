@@ -21,12 +21,12 @@ TEST_FEATURE_DIR = $(TEST_DIR)/feature
 # Reusable Clang optimization & diagnostic profiles
 CC ?= gcc
 CFLAGS ?= -Wall -Wextra -pedantic -Wconversion -Wsign-conversion \
-		  -Wno-overlength-strings -std=c17 -O2 -Iinclude -I$(BUILD_DIR) \
-		  -DDATADIR=$(DATADIR) -DSYSCONFDIR=$(SYSCONFDIR)
+          -Wno-overlength-strings -std=c17 -O2 -Iinclude -I$(BUILD_DIR) \
+          -DDATADIR=$(DATADIR) -DSYSCONFDIR=$(SYSCONFDIR)
 CLANG_OPT_FLAGS = -O3 -fomit-frame-pointer -flto=thin -fsave-optimization-record=yaml \
-				  -foptimization-record-file=$(OPT_DIR)/opt.yaml \
-				  -Rpass=inline -Rpass-missed=loop-vectorize \
-				  -Oz -ffunction-sections -fdata-sections -fomit-frame-pointer -flto=thin
+                  -foptimization-record-file=$(OPT_DIR)/opt.yaml \
+                  -Rpass=inline -Rpass-missed=loop-vectorize \
+                  -Oz -ffunction-sections -fdata-sections -fomit-frame-pointer -flto=thin
 CLANG_OPT_LDFLAGS = -flto=thin -fuse-ld=lld -Wl,--gc-sections -Wl,--icf=all -Wl,-s
 CLANG_SAN_FLAGS = -fsanitize=address,undefined -fno-omit-frame-pointer -g
 CLANG_SIZE_FLAGS   = -Oz -ffunction-sections -fdata-sections -fomit-frame-pointer -flto=thin
@@ -36,31 +36,33 @@ DEPFLAGS = -MMD -MP
 LDFLAGS ?=
 
 SRCS = $(SRC_DIR)/main.c \
-       $(SRC_DIR)/cli.c \
-       $(SRC_DIR)/cmd_dispatch.c \
-       $(SRC_DIR)/cmd_table.c \
-       $(SRC_DIR)/ignore.c \
-       $(SRC_DIR)/help.c \
-       $(SRC_DIR)/logger.c \
+       $(SRC_DIR)/cli/cli.c \
+       $(SRC_DIR)/cli/cmd_dispatch.c \
+       $(SRC_DIR)/cli/cmd_table.c \
+       $(SRC_DIR)/cli/help.c \
+       $(SRC_DIR)/core/checker.c \
+       $(SRC_DIR)/core/config.c \
+       $(SRC_DIR)/core/ignore.c \
+       $(SRC_DIR)/core/manifest.c \
+       $(SRC_DIR)/core/registry.c \
+       $(SRC_DIR)/core/scanner.c \
+       $(SRC_DIR)/core/stow.c \
+       $(SRC_DIR)/core/stowignore.c \
+       $(SRC_DIR)/utils/env.c \
+       $(SRC_DIR)/utils/fs.c \
+       $(SRC_DIR)/utils/logger.c \
        $(SRC_DIR)/utils/mem.c \
        $(SRC_DIR)/utils/path.c \
-       $(SRC_DIR)/utils/fs.c \
-       $(SRC_DIR)/utils/env.c \
        $(SRC_DIR)/utils/signal.c \
-       $(SRC_DIR)/utils/stowignore.c \
-       $(SRC_DIR)/config.c \
-       $(SRC_DIR)/registry.c \
-       $(SRC_DIR)/manifest.c \
-       $(SRC_DIR)/checker.c \
-       $(SRC_DIR)/scanner.c \
-       $(SRC_DIR)/stow.c
+       $(SRC_DIR)/utils/str.c \
+       $(SRC_DIR)/utils/timer.c
 
 OBJS = $(patsubst $(SRC_DIR)/%.c,$(BUILD_DIR)/%.o,$(SRCS))
 SRC_DEPS = $(patsubst $(SRC_DIR)/%.c,$(BUILD_DIR)/.deps/%.d,$(SRCS))
 DEPS = $(SRC_DEPS) $(TEST_DEPS)
 TARGET = $(BIN_DIR)/$(BIN_NAME)
 
-TEST_SRCS = $(wildcard $(TEST_UNIT_DIR)/*.c)
+TEST_SRCS = $(wildcard $(TEST_UNIT_DIR)/*.c $(TEST_UNIT_DIR)/*/*.c)
 TEST_OBJS = $(patsubst $(TEST_UNIT_DIR)/%.c,$(BUILD_TEST_DIR)/%.o,$(TEST_SRCS)) \
             $(filter-out $(BUILD_DIR)/main.o,$(OBJS))
 TEST_DEPS = $(patsubst $(TEST_UNIT_DIR)/%.c,$(BUILD_TEST_DIR)/.deps/%.d,$(TEST_SRCS))
@@ -73,10 +75,10 @@ all: $(TARGET)
 help:
 	@echo "  Build Targets:"
 	@echo ""
-	@echo "  make                      Build release binary using default compiler ($(CC))"
-	@echo "  make test                 Run unit test suite"
-	@echo "  make test-feature         Run end-to-end integration feature tests"
-	@echo "  make clean                Clean build and bin output directories"
+	@echo "  make                    Build release binary using default compiler ($(CC))"
+	@echo "  make test               Run unit test suite"
+	@echo "  make test-feature       Run end-to-end integration feature tests"
+	@echo "  make clean              Clean build and bin output directories"
 	@echo ""
 	@echo "  Clang Optimization & Diagnostics Targets:"
 	@echo "  make build-clang-opt      Build with Clang ThinLTO, -O3, and optimization remarks"
@@ -104,21 +106,15 @@ format:
 format-check:
 	clang-format --dry-run --Werror $(SRCS) $(TEST_SRCS) $(ALL_HDRS)
 
-# Compile using Clang with Thin LTO, aggressive optimization (-O3) and isolated optimization records
-# clean and OPT_DIR creation are sequenced inside the recipe; a prerequisite on $(OPT_DIR) would be
-# satisfied before clean runs but the directory would be deleted by clean moments later.
 build-clang-opt:
 	$(MAKE) clean
 	mkdir -p $(OPT_DIR)
 	$(MAKE) CC=clang CFLAGS="$(CFLAGS) $(CLANG_OPT_FLAGS)" LDFLAGS="$(LDFLAGS) $(CLANG_OPT_LDFLAGS)" $(TARGET)
 
-# Compile using Clang with sanitizers enabled (ASan + UBSan)
 build-sanitize:
 	$(MAKE) clean
 	$(MAKE) CC=clang CFLAGS="$(CFLAGS) $(CLANG_SAN_FLAGS)" LDFLAGS="$(LDFLAGS) $(CLANG_SAN_FLAGS)" $(TARGET)
 
-# Clean multi-stage PGO utilizing standard object file rules
-# clean and OPT_DIR creation are sequenced inside the recipe for the same reason as build-clang-opt.
 build-pgo:
 	@echo "=== Stage 1: Building instrumented binary ==="
 	$(MAKE) clean
@@ -134,11 +130,9 @@ build-pgo:
 	@rm -f default.profraw stow_app.profdata
 	@echo "=== PGO build complete ==="
 
-# Minimal binary footprint profile (<80KB)
 build-size:
 	$(MAKE) clean
 	$(MAKE) CC=clang CFLAGS="$(filter-out -O2 -O3,$(CFLAGS)) $(CLANG_SIZE_FLAGS)" LDFLAGS="$(LDFLAGS) $(CLANG_SIZE_LDFLAGS)" $(TARGET)
-
 
 static: CFLAGS += -static
 static: $(TARGET)
@@ -160,9 +154,8 @@ $(HELP_TXT_GEN): resources/help.txt | $(BUILD_DIR)
 	@sed -e 's/\\/\\\\/g' -e 's/"/\\"/g' -e 's/^/"/' -e 's/$$/\\n"/' $< >> $@
 	@echo ";" >> $@
 
-# Declare extra prerequisite without duplicating the recipe; pattern rule below handles compilation.
-# -I$(BUILD_DIR) is in CFLAGS globally so the generated header is found by all TUs that include it.
 $(BUILD_DIR)/main.o: $(HELP_TXT_GEN)
+$(BUILD_DIR)/cli/help.o: $(HELP_TXT_GEN)
 
 $(BUILD_DIR)/%.o: $(SRC_DIR)/%.c | $(BUILD_DIR)
 	@mkdir -p $(dir $@) $(dir $(BUILD_DIR)/.deps/$*)

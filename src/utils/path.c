@@ -31,7 +31,9 @@
 #include <string.h>
 #include <unistd.h>
 
-#include "utils.h"
+#include "utils/env.h"
+#include "utils/mem.h"
+#include "utils/path.h"
 
 void normalize_path(char *path)
 {
@@ -105,11 +107,15 @@ int collapse_path(char *path)
                     *w++ = '.';
                 } else {
                     depth--;
-                    w = path + (depth > 0 ? stack[depth] : (is_abs ? 1 : 0));
-                    if (!is_abs && depth > 0) {
-                        while (w > path && *(w - 1) != '/') {
-                            w--;
+                    if (depth > 0) {
+                        size_t pop_start = stack[depth];
+                        if (pop_start > 0 && path[pop_start - 1] == '/') {
+                            w = path + pop_start - 1;
+                        } else {
+                            w = path + pop_start;
                         }
+                    } else {
+                        w = path + (is_abs ? 1 : 0);
                     }
                 }
             } else if (!is_abs) {

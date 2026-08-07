@@ -43,7 +43,7 @@
 extern int g_tests_run;
 extern int g_tests_failed;
 
-#include "../include/utils.h"
+#include "utils/fs.h"
 
 static inline char *create_test_tmp_dir(char *buf, size_t buf_size, const char *prefix)
 {
