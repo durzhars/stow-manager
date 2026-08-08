@@ -22,8 +22,8 @@
 
 #define MAX_PATH_DEPTH 256
 
-#include <asm-generic/errno.h>
 #include <errno.h>
+
 #include <limits.h>
 #include <stddef.h>
 #include <stdio.h>
@@ -61,7 +61,8 @@ void normalize_path(char *path)
 int collapse_path(char *path)
 {
     if (!path || !*path) {
-        return 1;
+        errno = EINVAL;
+        return -1;
     }
 
     int is_abs = (path[0] == '/');

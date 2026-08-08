@@ -45,4 +45,6 @@ OPTIONS:
   -y, --install             Auto-confirm installation of missing dependencies
   -n, --dry-run             Preview disk changes without modifying disk
   -s, --save                Save command-line directory overrides (-d/-t) to config
+  -p, --profile             Enable execution performance profiler logging
   -h, --help                Display this help manual
+
